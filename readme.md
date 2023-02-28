@@ -1,4 +1,4 @@
-#This is the secrets.toml file
+#This is the secrets.toml file ( click on RAW to view the file properly )
 #You need to open a MongoDB account and OpenAPI key to deploy this app to streamlit. 
 #You can develop your own function and call the function in the main() , you need to modify the default tab list in secrets.toml to add in a new function
 #--------copy all the info below and put in the secrets settings in streamlit server, remember to get your open API key and MongoDB connection strings
