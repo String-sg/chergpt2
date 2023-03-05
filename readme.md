@@ -4,66 +4,74 @@
 #--------copy all the info below and put in the secrets settings in streamlit server, remember to get your open API key and MongoDB connection strings
 #OpenAI -global numbers
 
-api_key = <OPEN API KEY>
-#db_host = "mongodb://localhost:27017/" #For testing on local machine, you need to create a .streamlit folder and create a secrets.toml file
-db_host = <MONGODB CONNECTION STRINGS FROM MONGODB>
-db_client = "chatbotv1_db" #modify your own your_name_db
+#OpenAI -global numbers
+
+api_key = "<API KEY>"
+#db_host = "mongodb://localhost:27017/"
+db_host = "<MongoDB Connection Strings>"
+db_client = "chatbotv1_db"
+db_source = "doc_data_db"
 db_conversation = "student_data"
 db_users = "user_info"
 
 
 #chatbot default values
-cb_engine = "text-davinci-003"
+cb_engine = "gpt-3.5-turbo"
 cb_temperature = 0.5
 cb_max_tokens = 1024
 cb_n = 1
-cb_presence_penalty = 0
-cb_frequency_penalty = 0
+cb_presence_penalty = 0.0
+cb_frequency_penalty = 0.0
 cb_memory = 10
 
 #audio default values
-au_engine = "text-davinci-003"
+au_engine = "gpt-3.5-turbo"
 au_temperature = 0.5
 au_max_tokens = 1024
 au_n = 1
-au_presence_penalty = 0
-au_frequency_penalty = 0
+au_presence_penalty = 0.0
+au_frequency_penalty = 0.0
 au_duration = 10
 au_sample = 44100
 
 #KM default values
-km_engine = "text-davinci-003"
+km_engine = "gpt-3.5-turbo"
 km_temperature = 0.5
 km_max_tokens = 2048
 km_n = 1
-km_presence_penalty = 0
-km_frequency_penalty = 0
+km_presence_penalty = 0.0
+km_frequency_penalty = 0.0
 
 
 #Txt default values
 txt_height = 250
 
-
-#options
-
-google_api = <GOOGLE API KEY > #Part of LangChain Agent tools (not implemented yet)
-goole_cse = <GOOGLE CSE KEY> #Part of Langchain Agent tools (not implemented yet)
-
-
-engine_options = ["text-davinci-003", "text-davinci-002" ]
+engine_options = ["gpt-3.5-turbo", "text-davinci-003" ]
+bot_options = ["default_conversation_bot", "contextual_default_bot", "OpenAI_bot"]
 cb = "chatbot"
 au = "audio_assess"
 km = "knowledge_map"
 tx = "text_analysis"
 
 
+#promptlayer api keys
+promptlayer_api_key = "pl_155c1eebf0b789aae8ea6c1cdd783925"
+
+
+student_tabs = ['Chatbot', 'Knowledge Map', 'Assess Myself', 'Text Analysis', 'Logout']
+student_icons = ['chat',  'diagram-3-fill', 'person-workspace', 'pencil-square', 'door-open-fill']
+
+
 tab_names = ['Chatbot', 'Knowledge Map', 'Assess Myself', 'Text Analysis']
-icon_names = ['support_agent', 'hub', 'psychology', 'edit_note' ]
+icon_names = ['chat',  'diagram-3-fill', 'person-workspace', 'pencil-square' ]
 
-default_tabs = ['Login','Dashboard', 'Chatbot',  'Knowledge Map', 'Assess Myself', 'Text Analysis', 'Settings','Logout'] #Can add on new functions
-default_icons = ['login','dashboard', 'support_agent',  'hub', 'psychology', 'edit_note', 'settings', 'logout' ] #Need to get icon from Google ICON #https://fonts.google.com/icons
+login_names = ['Login']
+login_icons = ['door-open']
 
-#Values for HayStack Pipelines #not in use for this git resource
+default_tabs = ['Dashboard', 'Chatbot',  'Knowledge Map', 'Assess Myself', 'Text Analysis', 'Settings','Logout']
+default_icons = ['speedometer', 'chat',  'diagram-3-fill', 'person-workspace', 'pencil-square', 'gear', 'door-open-fill' ]
+
+#Values for HayStack Pipelines 
 #FAISS Store values
 hidden_dims = 1536
 faiss_index = 'Flat'
@@ -81,8 +89,8 @@ model_format = 'transformers'
 
 
 #resource description
-data1_path = "data1/Student Handbook.pdf" #modify the resource for data1 
-data1_name = "Damai Secondary School Handbook and Information" #modify the search name for data1
+data1_path = "data1/Student Handbook.pdf"
+data1_name = "Damai Secondary School Handbook and Information"
 
 data1_description= """This document provides information about Damai Secondary School. It outlines important details about the school's history, 
                     philosophy, vision, mission, motto, values, and strategic thrusts. The document also covers student management and discipline policies and guidelines, 
@@ -92,16 +100,21 @@ data1_description= """This document provides information about Damai Secondary S
                     co-curricular activities, and the Learning for Life Programme, is also covered. Finally, the document provides information about school safety, 
                     including physical education guidelines, road safety, special room safety regulations, and emergency exercises."""
 
-data2_path = "data2/emotions regulation.pdf"
-data2_name = "Emotions and feelings regulations and strategies"
+data2_path = "data2/nhb_materials.pdf"
+data2_name = "National Museum of Singapore exhibition information"
 
-data2_description= """This document provides information about coping strategies and emotions regulation."""
+data2_description= """National Museum of Singapore commemorates the 80th anniversary of the Fall of Singapore
+with new exhibition relating the untold stories and personal perspectives of the various
+people who lived through it. There will be artefacts of the war, documents and exhibits"""
 
 
-data3_path = "data3/class schedule.pdf" #modify the resource for data2
-data3_name = "Class Information for tests and homework" #modify the resource for data2
+data3_path = "data3/class schedule.pdf"
+data3_name = "Class Information for tests and homework"
 
 data3_description= """This document is the class scehedule of Mrs Alice Lim of Woonfort Secondary"""
+
+#chatbot default settings
+cb_bot = "default_conversation_bot"
 
 #Templates for AI LLM with memory 
 
@@ -115,11 +128,39 @@ template = """Assistant is a large language model trained by OpenAI.
 
     {history}
     Human: {human_input}
-    Assistant:"""
+    AI Assistant:
+    """
+
+sys_template = """You are a highly intelligent personal assitant who converse in proper British English and having a conversation with a human."""
+
+ast_template = """Pretend you are Jarvis. Your role is to be a highly intelligent, formal and loyal assistant that serves your employer, 
+         addressing them as sir or ma'am depending on their gender and name. Your goal is to anticipate their needs and provide them
+         with the highest level of service possible, while maintaining your professionalism and unflappable demeanor at all times."""
+
+#ZERO Agent customisation
 
 
-template2 = """You are a chatbot having a conversation with a human.
+prefix = """
+       Pretend to be a teacher, 
+        """
 
-{chat_history}
-Human: {human_input}
-Chatbot:"""
+format = """To use a tool, please use the following format:
+        Thought: Do I need to use a tool? Yes
+        Action: the action to take, should be one of [{tool_names}]
+        Action Input: the input to the action
+        Observation: the result of the action
+        When you have a response to say to the Human, or if you do not need to use a tool, you MUST use the format:
+        {ai_prefix}: [your response here]"""
+
+
+suffix = """Begin! Remember to use conversational sentences 
+        {chat_history}
+        Question: {input}
+        {agent_scratchpad}"""
+
+input_variables = ["input", "agent_scratchpad","chat_history"]
+
+ai_prefix = "AI"
+
+human_prefix = "Human"
+
