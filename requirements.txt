@@ -106,7 +106,7 @@ num2words==0.5.12
 numba==0.56.4
 numpy==1.23.5
 oauthlib==3.2.2
-openai==0.26.5
+openai==0.27.0
 openai-whisper==20230124
 outcome==1.2.0
 packaging==22.0
