@@ -1,5 +1,5 @@
-#version 7 - Customise ChatBot with memory
-from st_on_hover_tabs import on_hover_tabs
+#version 9 - three chat bots
+from streamlit_option_menu import option_menu
 import streamlit as st
 import pymongo
 import openai
@@ -26,13 +26,15 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import Chroma, FAISS
 from langchain.text_splitter import CharacterTextSplitter
 from langchain import OpenAI, ConversationChain, LLMChain, PromptTemplate, VectorDBQA
-from langchain.agents import Tool, tool
+from langchain.agents import Tool, tool, initialize_agent, ZeroShotAgent, AgentExecutor, ConversationalAgent
 from langchain.tools import BaseTool
-from langchain.chains.conversation.memory import ConversationalBufferWindowMemory, ConversationBufferMemory
-from langchain.agents import initialize_agent
+from langchain.chains.conversation.memory import ConversationalBufferWindowMemory, ConversationBufferMemory, ConversationEntityMemory, ConversationSummaryMemory, CombinedMemory
+from langchain.chains.conversation.prompt import ENTITY_MEMORY_CONVERSATION_TEMPLATE
 from langchain.document_loaders import PagedPDFSplitter
 from langchain.document_loaders import UnstructuredDocxLoader
 from langchain.chains import VectorDBQAWithSourcesChain
+#import promptlayer
+#from promptlayer.langchain.llms import OpenAI
 
 
 #MongoDB connection Settings
@@ -59,6 +61,7 @@ cb_max_tokens = st.secrets["cb_max_tokens"]
 cb_n = st.secrets["cb_n"]
 cb_presence_penalty = st.secrets["cb_presence_penalty"]
 cb_frequency_penalty = st.secrets["cb_frequency_penalty"]
+
 #audio default values
 au_engine = st.secrets["au_engine"]
 au_temperature = st.secrets["au_temperature"]
@@ -82,12 +85,29 @@ height = st.secrets["txt_height"]
 
 #------------------ Function for assessing myself --------------------------------------------------
 
-def record_myself():
+def select_language():
+    language_options = ["English", "Mandarin", "Malay", "Tamil"]
+    default_language = "English"
+
+    # Display the language selection dropdown
+    selected_language = st.selectbox("Select your spoken language:", language_options, index=language_options.index(default_language))
+
+    # Map the selected language to a language code
+    language_codes = {
+        "English": "en",
+        "Mandarin": "zh",
+        "Malay": "ms",
+        "Tamil": "ta"
+    }
+    selected_language_code = language_codes.get(selected_language, "ms")
+
+    # Display the selected language and language code
+
+    return selected_language, selected_language_code
+
+def record_myself(language):
     sample_rate = st.session_state.au_settings_key["au_sample"]
-    if st.session_state.audio_key != None:
-        my_duration = st.session_state.audio_key
-    else:
-        my_duration = st.session_state.au_settings_key["au_duration"]
+    my_duration = st.session_state.au_settings_key["au_duration"] #set in settings page
     # Create a button to start recording
     #if st.button("Record"):
     audio_bytes = audio_recorder(energy_threshold=(-1.0, 1.0),
@@ -95,37 +115,42 @@ def record_myself():
     progress_text = ":green[🎙️ Recording in progress...]"
     #my_bar = st.progress(0, text=progress_text)
     if audio_bytes:
-        st.write("Playback:")
+        st.write("Press play to hear your recording:")
         st.audio(audio_bytes, format="audio/wav")
         filename = "audio/recording.wav"
         with open(filename, "wb") as f:
             f.write(audio_bytes)
 
-
-        model = whisper.load_model("base")
-        result = model.transcribe(filename)
+        audio_file= open(filename, "rb")
+        result = openai.Audio.transcribe(model="whisper-1", file=audio_file, language=language)
 
         return result["text"]
 
-def assessment_prompt(prompt, transcript, assessment_type, level):
+def assessment_prompt(prompt, transcript, assessment_type, level, language):
     au_engine, au_temperature, au_max_tokens, au_n, au_presence_penalty, au_frequency_penalty, au_duration, au_sample = st.session_state.au_settings_key.values()
     # Generate GPT response and feedback based on prompt and assessment type
     if assessment_type == "Oral Assessment":
-        feedback = f"Provide feedback as a {level} teacher on sentence structure and phrasing to help the student sound more proper."
+        feedback = f"Provide feedback as a {level} {language} teacher on sentence structure and phrasing to help the student sound more proper."
         #st.write(f"{prompt} " + feedback + "The transcript is :" + transcript)
-        response = openai.Completion.create(
-            engine=au_engine,
-            prompt=f"{prompt} " + feedback + "The transcript is :" + transcript,
+        response = openai.ChatCompletion.create(
+            model=au_engine,
+            messages=[{"role": "system", "content": feedback},
+                       {"role": "assistant", "content": prompt},
+                       {"role": "user", "content": transcript}  ],
+            #prompt=f"{prompt} " + feedback + "The transcript is :" + transcript,
             max_tokens=au_max_tokens,
             n=au_n,
             temperature= au_temperature,
             presence_penalty= au_presence_penalty,
             frequency_penalty = au_frequency_penalty)
     elif assessment_type == "Content Assessment":
-        feedback = f"Provide feedback as a {level} teacher on the accuracy and completeness of the content explanation, and correct any errors or misconceptions."
-        response = openai.Completion.create(
-            engine=au_engine,
-            prompt=f"{prompt} " + feedback + "The transcript is :" + transcript,
+        feedback = f"Provide feedback as a {level} {language} teacher on the accuracy and completeness of the content explanation, and correct any errors or misconceptions."
+        response = openai.ChatCompletion.create(
+            model=au_engine,
+            #prompt=f"{prompt} " + feedback + "The transcript is :" + transcript,
+            messages=[{"role": "system", "content": feedback},
+                       {"role": "assistant", "content": prompt},
+                       {"role": "user", "content": transcript}  ],
             max_tokens=au_max_tokens,
             n=au_n,
             temperature= au_temperature,
@@ -135,116 +160,87 @@ def assessment_prompt(prompt, transcript, assessment_type, level):
     # Display response and feedback to user
     if response is not None:
         #st.write("Assessment prompt: " + prompt)
-        answer = response["choices"][0]["text"]
+        answer = response['choices'][0]['message']['content']
         answer = answer.strip()
         #answer = ''.join(answer.splitlines())
-        st.write(f"AI Feedback: :violet[{answer}]")
+        st.write(f"AI Feedback: {answer}")
         return answer
       # st.write("Feedback: " + feedback)
 
 
-#---------------- Teachers log in authentication function ------------------------------------------------------
-
-def login(db, username, password):
-    # user_info_collection = db["user_info"]
-    user = user_info_collection.find_one({"tch_code": username})
-    if user:
-        hashed_password = hashlib.sha256(password.encode()).hexdigest()
-        if user["pass_key"] == hashed_password:
-            st.write("Login successful!")
-            vta_codes = [user.get("vta_code{}".format(i), None) for i in range(1, 6)]
-            api_key = user.get("api_key", None)
-            return vta_codes, api_key
-        else:
-            st.write("Incorrect password!")
-            return None, None
-    else:
-        st.write("User not found!")
-        return None, None
+#---------------- Teachers and student log in authentication function ------------------------------------------------------
 
 
-def teacher_download():
-   
+
+def teacher_login():
     with st.form(key="authenticate"):
         st.write("Please key in your teacher code and password to access the data")
         teacher_code = st.text_input('Teacher code:')
         password = st.text_input('Password:', type="password")
         submit_button = st.form_submit_button(label='Login')
         if submit_button:
-            vta_codes, api_key = login(db, teacher_code, password)
-            if vta_codes and api_key:
-                st.session_state.login_key = True
-                return vta_codes, api_key, teacher_code
+            user = user_info_collection.find_one({"tch_code": teacher_code})
+            if user:
+                hashed_password = hashlib.sha256(password.encode()).hexdigest()
+                if user["pass_key"] == hashed_password:
+                    st.write("Login successful!")
+                    vta_codes = [user.get("vta_code{}".format(i), None) for i in range(1, 6)]
+                    api_key = user.get("api_key", None)
+                    st.session_state.bot_key = user.get("bot_settings", st.session_state.bot_key)
+                    st.session_state.cb_settings_key =  user.get("cb_settings", st.session_state.cb_settings_key )
+                    st.session_state.au_settings_key =  user.get("au_settings", st.session_state.au_settings_key )
+                    st.session_state.km_settings_key =  user.get("km_settings", st.session_state.km_settings_key )
+                    st.session_state.au_settings_key["au_duration"] = user.get("audio_settings",st.secrets["au_duration"])
+                    st.session_state.tab_key = st.secrets['default_tabs'], st.secrets['default_icons']
+                    st.session_state.login_key = True
+                    st.session_state.codes_key = vta_codes
+                    st.session_state.api_key = api_key
+                    st.session_state.vta_code = teacher_code
+                    st.session_state.vta_key = True
+                    #st.write(st.session_state.bot_key )
+                    return True
+                else:
+                    st.error("Incorrect password!")
             else:
-                st.error("Incorrect teacher code or password")
-
-#------------------------------------------- Student VTA Code Log in  ------------------------------------------------------
-
-# def get_api_key_by_vta_code(vta_code, collection):
-#     query = {"$or": [{"vta_code1": vta_code},
-#                      {"vta_code2": vta_code},
-#                      {"vta_code3": vta_code},
-#                      {"vta_code4": vta_code},
-#                      {"vta_code5": vta_code}]}
-#     projection = {"_id": 0, "api_key": 1}
-#     cursor = collection.find(query, projection)
-#     for doc in cursor:
-#         if "api_key" in doc:
-#             return doc["api_key"]
-#     return False
+                st.error("User not found!")
+    return False
 
 
-def get_api_key_by_vta_code(vta_code, collection):
-    query = {"$or": [{"vta_code1": vta_code},
-                     {"vta_code2": vta_code},
-                     {"vta_code3": vta_code},
-                     {"vta_code4": vta_code},
-                     {"vta_code5": vta_code}]}
-    projection = {"_id": 0, "api_key": 1, "name_settings": 1, "icon_settings": 1, "audio_settings": 1}
-    cursor = collection.find(query, projection)
-    for doc in cursor:
-        if "api_key" in doc:
-            return doc["api_key"], doc.get("name_settings"), doc.get("icon_settings"), doc.get("audio_settings")
-    return False, None, None, None
-
-
-
-#checking if vta_code exist
-def check_vta_code():
+def class_login():
     with st.form(key='access'):
-        #st.write("Welcome to GPT-3 chatbot ")
         st.write("Students, enter your VTA code to access this tool")
-        st.write("Teachers, log in to the dashboard to access this tool")
         vta_code = st.text_input('VTA code: ')
         vta_code = vta_code.lower()
         submit_button = st.form_submit_button(label='Start')
-
         if submit_button:
-
-            #cursor.execute('''SELECT * FROM users_db WHERE vta_code = ?''', (vta_code,))
-            #result = cursor.fetchone()
-            # user_info_collection = db["user_info"] #need to change and set it in secret
-            result = get_api_key_by_vta_code(vta_code, user_info_collection)
-            api, tab_names, icon_names, audio = result
-            #result = None
-            #vta_code = "joe"
-            #result = "found"
-            # Check if the vta_code exists in the sheet_db table
-            if api is False:
-                st.error("vta_code not found, please request for a VTA code before starting your session")
-                #st.session_state.vta_key == False
-            else:
-                #st.success("vta_code found in the sheet_db table: ")
-                #st.write(result)
-                # put into session tab code if tab_names are not None
-                if tab_names != None and icon_names != None:
+            query = {"$or": [{"vta_code1": vta_code},
+                             {"vta_code2": vta_code},
+                             {"vta_code3": vta_code},
+                             {"vta_code4": vta_code},
+                             {"vta_code5": vta_code}]}
+            projection = {"_id": 0, "api_key": 1, "name_settings": 1, "icon_settings": 1, "audio_settings": 1, "bot_settings": 1, "default_template": 1, "entity_template": 1, "cb_settings": 1, "au_settings": 1, "km_settings": 1}
+            cursor = user_info_collection.find(query, projection)
+            for doc in cursor:
+                if "api_key" in doc:
+                    result = doc["api_key"]
+                    tab_names = doc.get("name_settings", st.secrets["student_tabs"])
+                    icon_names = doc.get("icon_settings", st.secrets["student_icons"])
+                    audio = doc.get("audio_settings")
+                    st.session_state.bot_key = doc.get("bot_settings", st.session_state.bot_key)
+                    st.session_state.cb_settings_key =  doc.get("cb_settings", st.session_state.cb_settings_key )
+                    st.session_state.au_settings_key =  doc.get("au_settings", st.session_state.au_settings_key )
+                    st.session_state.km_settings_key =  doc.get("km_settings", st.session_state.km_settings_key )
+                    if audio is not None:
+                        st.session_state.au_settings_key["au_duration"] = audio
                     st.session_state.tab_key = tab_names, icon_names
-                if audio != None:
-                    st.session_state.audio_key = audio
-                st.session_state.vta_key = True
-                st.session_state.vta_code = vta_code
-                st.session_state.api_key = api
-                return True
+                    st.session_state.vta_key = True
+                    st.session_state.vta_code = vta_code
+                    st.session_state.api_key = result
+                    return True
+            st.error("VTA code not found, please request for a VTA code before starting your session")
+            return False
+
+
 
 #@st.cache_resource        
 def cache_api(): #assigning openai key  and vta_code from the logins
@@ -252,6 +248,8 @@ def cache_api(): #assigning openai key  and vta_code from the logins
     vta_code = st.session_state.vta_code
     os.environ["OPENAI_API_KEY"] = st.session_state.api_key
     os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
+    # os.environ["PROMPTLAYER_API_KEY"] = st.session_state.promptlayer_api_key
+    # promptlayer.api_key  = st.session_state.promptlayer_api_key
 
 
 #--------------------------------------- Dashboard settings -------------------------------------------------------------------
@@ -349,45 +347,11 @@ def clear_text():
     st.session_state["temp"] = st.session_state["text"]
     st.session_state["text"] = ""
 
-
-@tool
-def search_doc(query: str) -> str: #further exploration need - referencing document
-    """
-    Search a machine learning model with the given query and return the answer with sources as a string.
-    """
-    data2 = load_chain(st.secrets["data2_path"], st.secrets["data2_name"])
-    my_dict = data2({"question": query}, return_only_outputs=True)
-    # answer = my_dict['answer'].strip()
-    # sources = my_dict['sources']
-    # result = f"{answer} (sources: {sources})"
-    return my_dict
-
-
 #@st.cache_resource 
 def chat_bot(user_input):
     cb_engine, cb_temperature, cb_max_tokens, cb_n, cb_presence_penalty, cb_frequency_penalty = st.session_state.cb_settings_key.values()   
-    data1 = load_FAISS_store(st.secrets["data1_path"], st.secrets["data1_name"])    
-    data2 = load_FAISS_store(st.secrets["data2_path"], st.secrets["data2_name"])
-
-
-    tools = [ 
-        Tool(
-        name = st.secrets["data1_name"],
-        func=data1.run,
-        description=st.secrets['data1_description'],
-        #return_direct=True
-        ),
-        Tool(
-        name = st.secrets["data2_name"],
-        func=data2.run,
-        description=st.secrets['data2_description'],
-        #return_direct=True,
-        ),
-
-    ]
-
-
     vta_code = st.session_state.vta_code
+    #st.write(st.session_state.bot_key )
     
     with st.expander("Chat History - please close this expander before asking more questions"):
         messages = st.session_state.chat_msg
@@ -399,22 +363,19 @@ def chat_bot(user_input):
             st.markdown(f'<div style="text-align: right;">{user_msg} <span style="color: blue;">:😃 User </span></div>', unsafe_allow_html=True)
             st.write("#")
     
-    #response = extractive_chatbot(user_input)
-    # response = openai.Completion.create(
-    #                                     engine=cb_engine, 
-    #                                     prompt=f"Pretend you are a {level} teacher, " + user_input, 
-    #                                     temperature=cb_temperature, 
-    #                                     max_tokens=cb_max_tokens, 
-    #                                     n=cb_n,
-    #                                     presence_penalty= cb_presence_penalty,
-    #                                     frequency_penalty = cb_frequency_penalty)
-    agent_chain = agent_response(tools)
-    response = agent_chain.run(input=user_input)
-    #response = agent_chain({"query": user_input})
-                                        
-    if user_input:
-        try:
+    try:
 
+#Tool Settings
+        if st.session_state.bot_key["cb_bot"] == "contextual_default_bot":
+            response = LLM_entity_response().predict(input=user_input)
+        elif st.session_state.bot_key["cb_bot"] == "default_conversation_bot":
+            response = LLM_chain_response().predict(human_input=user_input)
+        elif st.session_state.bot_key["cb_bot"] == "OpenAI_bot":
+            response = openAI_response(user_input)
+            response = response['choices'][0]['message']['content']
+             
+        if user_input:
+    
             question = user_input
             answer = response
             #st.write(answer)
@@ -434,28 +395,14 @@ def chat_bot(user_input):
             st.session_state.chat_msg.append({ "question": question, "response": answer})
             return vta_code, question, answer, dt_string
 
-        except openai.APIError as e:
-            st.error(e)
-            # question = user_input
-            # answer = ""
-            # error = f"ApiError: {e}"
-            # now = datetime.now()
-            # # dd/mm/YY H:M:S
-            # dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-            # #data_collection.insert_one({"vta_code": vta_code, "text": question, "response": answer, "error": error, "created_at": dt_string})
-            return False
+    except openai.APIError as e:
+        st.error(e)
+        return False
 
 
-        except Exception as e:
-            st.error(e)
-            # question = user_input
-            # answer = ""
-            # error = f"Unexpected Error: {e}"
-            # now = datetime.now()
-            # # dd/mm/YY H:M:S
-            # dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
-            # #data_collection.insert_one({"vta_code": vta_code, "text": question, "response": answer, "error": error, "created_at": dt_string})
-            return False
+    except Exception as e:
+        st.error(e)
+        return False
 
 
 #@st.cache_resource 
@@ -469,89 +416,58 @@ def messages(messages):
         st.write("#")
 
 
-# @st.cache_resource
-# def LLM_chain_response():
-#     prompt = PromptTemplate(
-#                             input_variables=["history", "human_input"], 
-#                             template=st.secrets["template"]
-#                             )
+def openAI_response(user_input):
 
-#     llm = OpenAI(
-#                 model_name=cb_engine, 
-#                 temperature=cb_temperature, 
-#                 max_tokens=cb_max_tokens, 
-#                 n=cb_n,
-#                 presence_penalty= cb_presence_penalty,
-#                 frequency_penalty = cb_frequency_penalty
-#                 )
+    response = openai.ChatCompletion.create(
+        model=au_engine,
+        messages=[{"role": "system", "content": st.session_state.bot_key["cb_system"] },
+                   {"role": "assistant", "content": st.session_state.bot_key["cb_assistant"]},
+                   {"role": "user", "content": user_input}  ],
+        #prompt=f"{prompt} " + feedback + "The transcript is :" + transcript,
+        max_tokens=cb_max_tokens,
+        n=cb_n,
+        temperature= cb_temperature,
+        presence_penalty= cb_presence_penalty,
+        frequency_penalty = cb_frequency_penalty)
 
-
-#     chatgpt_chain = LLMChain(
-#                                 llm=llm, 
-#                                 prompt=prompt, 
-#                                 verbose=True, 
-#                                 memory=ConversationalBufferWindowMemory(k=st.secrets["cb_memory"])
-#                                 #memory=memory
-#                                 )
-
-#     return chatgpt_chain
+    return response
 
 
-@st.cache_resource  
-def load_FAISS_store(_path, _name): #demo1
+@st.cache_resource
+def LLM_chain_response():
+    prompt = PromptTemplate(
+                            input_variables=["history", "human_input"], 
+                            template=st.session_state.bot_key["cb_template"]
+                            )
+
     llm = OpenAI(
                 model_name=cb_engine, 
-                temperature=0, 
+                temperature=cb_temperature, 
                 max_tokens=cb_max_tokens, 
                 n=cb_n,
                 presence_penalty= cb_presence_penalty,
                 frequency_penalty = cb_frequency_penalty
                 )
-    
-    loader = PagedPDFSplitter(_path)
-    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-    documents = loader.load()
-    texts = text_splitter.split_documents(documents)
-    embeddings = OpenAIEmbeddings()
-    docsearch = FAISS.from_documents(texts, embeddings, collection_name=_name)
-    d_search = VectorDBQA.from_chain_type(llm=llm, chain_type="stuff", vectorstore=docsearch)
-
-    return d_search
-
-@st.cache_resource  
-def load_chain(_path, _name): #demo1
-    llm = OpenAI(
-                model_name=cb_engine, 
-                temperature=0, 
-                max_tokens=cb_max_tokens, 
-                n=cb_n,
-                presence_penalty= cb_presence_penalty,
-                frequency_penalty = cb_frequency_penalty
-                )
-    
-    loader = PagedPDFSplitter(_path)
-    text_splitter = CharacterTextSplitter(chunk_size=1000, chunk_overlap=0)
-    documents = loader.load()
-    texts = text_splitter.split_documents(documents)
-    embeddings = OpenAIEmbeddings()
-    docsearch = FAISS.from_documents(texts, embeddings, metadata=[{"source": f"{i}-pl"} for i in range(len(texts))], collection_name=_name)
-    chain = VectorDBQAWithSourcesChain.from_chain_type(OpenAI(temperature=0), chain_type="stuff", vectorstore=docsearch)
-
-    return chain
 
 
+    chatgpt_chain = LLMChain(
+                                llm=llm, 
+                                prompt=prompt, 
+                                verbose=True, 
+                                memory=ConversationalBufferWindowMemory(k=st.secrets["cb_memory"])
+                                #memory=memory
+                                )
 
+    return chatgpt_chain
 
 
 
 @st.cache_resource
-def agent_response(_tools):
-
-    memory = ConversationBufferMemory(memory_key="chat_history")
-
+def LLM_entity_response():
+    #ENTITY_MEMORY_CONVERSATION_TEMPLATE=st.session_state.bot_key["cb_entity_template"]
     llm = OpenAI(
                 model_name=cb_engine, 
-                temperature=0, 
+                temperature=cb_temperature, 
                 max_tokens=cb_max_tokens, 
                 n=cb_n,
                 presence_penalty= cb_presence_penalty,
@@ -559,16 +475,17 @@ def agent_response(_tools):
                 )
 
 
-    agent_chain = initialize_agent(tools=_tools,
-                                llm=llm, 
-                                #prompt=prompt,
-                                agent="conversational-react-description",
-                                verbose=True, 
-                                memory=memory)
-                                #memory=memory
-                                
+    conversation = ConversationChain(
+                                    llm=llm, 
+                                    verbose=True,
+                                    #prompt=str(st.session_state.bot_key["cb_entity_template"]),
+                                    prompt=ENTITY_MEMORY_CONVERSATION_TEMPLATE,
+                                    memory=ConversationEntityMemory(llm=llm)
+                                    )
 
-    return agent_chain
+    return conversation
+
+
 
 
 
@@ -582,58 +499,53 @@ def generate_mindmap():
     topic = st.text_input("Enter a topic to create a knowldege map:")
     levels = st.slider("Enter the number of map levels:", 1, 10, 4)
     #description = st.checkbox("Generate description")
-    if st.button('Generate syntax and knowldege map'):
+    if st.button('Step 1. Generate knowldege map syntax'):
+        if topic == "":
+            st.error('Please input a topic')
+        else:
 
-        # Create prompt string with user inputs
-        #prompt = f"Let's start by creating a simple MindMap on the topic of {topic}. Can you give the mindmap in PlantUML format. Keep it structured from the core central topic branching out to other domains and sub-domains. Let's go to {levels} levels to begin with. Add the start and end mindmap tags and keep it expanding on one side for now."
-        prompt = f"""Let's start by creating a simple MindMap on the topic of {topic}. 
-        Can you give the mindmap in PlantUML format. Keep it structured from the core central topic branching out to other domains and sub-domains. 
-        Let's go to {levels} levels to begin with. Add the start and end mindmap tags and keep it expanding on one side for now. 
-        Also, please add color codes to each node based on the complexity of each topic in terms of the time it takes to learn that topic for a beginner. Use the format *[#colour] topic. 
-        """
+            # Create prompt string with user inputs
+            #prompt = f"Let's start by creating a simple MindMap on the topic of {topic}. Can you give the mindmap in PlantUML format. Keep it structured from the core central topic branching out to other domains and sub-domains. Let's go to {levels} levels to begin with. Add the start and end mindmap tags and keep it expanding on one side for now."
+            prompt = f"""Let's start by creating a simple MindMap on the topic of {topic}. 
+            Can you give the mindmap in PlantUML format. Keep it structured from the core central topic branching out to other domains and sub-domains. 
+            Let's go to {levels} levels to begin with. Add the start and end mindmap tags and keep it expanding on one side for now. 
+            Also, please add color codes to each node based on the complexity of each topic in terms of the time it takes to learn that topic for a beginner. Use the format *[#colour] topic. 
+            """
 
-        # Generate response using OpenAI API
-        response = openai.Completion.create(
-                                        engine=km_engine, 
-                                        prompt=prompt, 
-                                        temperature=km_temperature, 
-                                        max_tokens=km_max_tokens, 
-                                        n=km_n,
-                                        presence_penalty= km_presence_penalty,
-                                        frequency_penalty = km_frequency_penalty)
-
-        if response.choices[0].text != None:
-            #st.write(response.choices[0].text)
-
-            # Extract PlantUML format string from response
-             # Extract PlantUML format string from response
-            plantuml = re.search(r'@startmindmap.*?@endmindmap', response.choices[0].text, re.DOTALL).group()
-
-            # Display PlantUML code in Streamlit app
-
-            # if description == True:
             #     prompt = f"""Analyse this PlantUML syntax: {plantuml}. 
-            #                 Can you add a definition to only the leaf nodes? These definitions should be word-wrapped using PlantUML format and not have a surrounding box. 
-            #                 Keep the Colors of the nodes as-is, and add additional description nodes to all leaf nodes. The format for adding leaf nodes is ****_ follow by a white space and 'description'
-            #                 """
+                #                 Can you add a definition to only the leaf nodes? These definitions should be word-wrapped using PlantUML format and not have a surrounding box. 
+                #                 Keep the Colors of the nodes as-is, and add additional description nodes to all leaf nodes. The format for adding leaf nodes is ****_ follow by a white space and 'description'
+                #                 """
+            try:
+                # Generate response using OpenAI API
+                response = openai.ChatCompletion.create(
+                                                model=km_engine, 
+                                                messages=[{"role": "user", "content": prompt}],
+                                                temperature=km_temperature, 
+                                                max_tokens=km_max_tokens, 
+                                                n=km_n,
+                                                presence_penalty= km_presence_penalty,
+                                                frequency_penalty = km_frequency_penalty)
 
-            #     # Generate response using OpenAI API
-            #     response = openai.Completion.create(
-            #         engine=cb_engine,
-            #         prompt=prompt,
-            #         temperature=0.5,
-            #         max_tokens=2048,
-            #         top_p=1,
-            #         frequency_penalty=0,
-            #         presence_penalty=0
-            #     )
+                if response['choices'][0]['message']['content'] != None:
+                    msg = response['choices'][0]['message']['content']
+                    
+                  
+                     # Extract PlantUML format string from response
+                    plantuml = re.search(r'@startmindmap.*?@endmindmap', msg, re.DOTALL).group()
 
+                # else:
+                    #st.write(plantuml)
+                return plantuml
+            except openai.APIError as e:
+                st.error(e)
+                st.error("Please type in a new topic or change the words of your topic again")
+                return False
 
-            #     plantuml = re.search(r'@startmindmap.*?@endmindmap', response.choices[0].text, re.DOTALL).group()
-            #     return plantuml
-
-            # else:
-            return plantuml
+            except Exception as e:
+                st.error(e)
+                st.error("Please type in a new topic or change the words of your topic again")
+                return False
 
 
 # Define a function to render the PlantUML diagram
@@ -713,7 +625,15 @@ def main():
     if 'tab_key' not in st.session_state:
         st.session_state.tab_key = None
 
+    if 'bot_key' not in st.session_state:
+        st.session_state.bot_key = {
+                                      "cb_bot": st.secrets["cb_bot"],
+                                      "cb_template": st.secrets['template'],
+                                      #"cb_entity_template": ENTITY_MEMORY_CONVERSATION_TEMPLATE,
+                                      "cb_system" : st.secrets['sys_template'],
+                                      "cb_assistant" : st.secrets['ast_template']
 
+                                    }
 
     if 'cb_settings_key' not in st.session_state:
         st.session_state.cb_settings_key = {
@@ -748,12 +668,12 @@ def main():
                                         }
 
 
-    st.title("✎ CherGPT V2 - Virtual Learning Assistant")
+    st.title("✎ POC in the use AI tools using OpenAi GPT-3/Whisper")
     #st.sidebar.image('images/cotf_logo.png', width=300)
     
     #st.write(":red[Formerly known as CherGPT]")
-    st.markdown('<style>' + open('./style.css').read() + '</style>', unsafe_allow_html=True)
-    st.sidebar.image('images/string.jpeg', width=50)
+    #st.markdown('<style>' + open('./style.css').read() + '</style>', unsafe_allow_html=True)
+    st.sidebar.image('images/string.jpeg', width=225)
 
 
     with st.sidebar: #options for sidebar
@@ -761,12 +681,19 @@ def main():
             tab_names, icon_names = st.session_state.tab_key
             #st.write(st.session_state.tab_key)
         else:
-            tab_names = st.secrets["default_tabs"]
-            icon_names = st.secrets["default_icons"]
+            tab_names = st.secrets["login_names"]
+            icon_names = st.secrets["login_icons"]
 
-        tabs = on_hover_tabs(tabName=tab_names, # Dashboard will have chat access and data from the questions, midmap, Media Analysis, Assess Myself
-                             iconName=icon_names, default_choice=0)
-
+        tabs  = option_menu(None, tab_names, 
+                    icons=icon_names, 
+                    menu_icon="cast", default_index=0, orientation="vertical",
+                    styles={
+                        "container": {"padding": "0!important", "background-color": "#fafafa",  "width": "225px", "margin-left": "0"},
+                        "icon": {"color": "grey", "font-size": "20px"}, 
+                        "nav-link": {"font-size": "20px", "text-align": "left", "margin":"0px", "--hover-color": "#eee"},
+                        "nav-link-selected": {"background-color": "black"},
+                }
+            )
     if tabs =='Login':
         colored_header(
         label="Students and Teachers Login page",
@@ -779,21 +706,20 @@ def main():
             col1, col2 = st.columns([2,2])
             with col1:
                 if 'vta_key' not in st.session_state or st.session_state.vta_key != True:
-                    result = teacher_download()
+                    result = teacher_login()
                     if result:
-                        codes, api, tch_code = result
-                        st.session_state.api_key = api
-                        st.session_state.codes_key = codes
-                        st.session_state.vta_code = tch_code
-                        st.session_state.vta_key = True
+                        pass
                         placeholder2.empty()
             with col2:
                 if 'vta_key' not in st.session_state or st.session_state.vta_key != True:
-                    if check_vta_code() == True:
+                    if class_login() == True:
                         cache_api()
+                        pass
                         placeholder2.empty()
         if st.session_state.vta_key == True:
-            placeholder3.success("You have logged in successfully")
+            placeholder3.success("You have logged in successfully!")
+            st.success("Please click on the Login word in the sidebar to begin!")
+
 
 
     elif tabs =='Dashboard':
@@ -802,41 +728,20 @@ def main():
         description="Analyse and access your class conversation data",
         color_name="yellow-70",
         )
-        if 'login_key' not in st.session_state or st.session_state.login_key == False:
-            st.info("Data page accessible by educators only")
-            st.error("Please log in to access this feature")
-        elif st.session_state.login_key == True:
-            col1, col2 = st.columns([1,2])
-            with col1:
-                generate_wordcloud_from_mongodb(st.session_state.codes_key)
+        # if 'login_key' not in st.session_state or st.session_state.login_key == False:
+        #     st.info("Data page accessible by educators only")
+        #     st.error("Please log in to access this feature")
+        # elif st.session_state.login_key == True:
+        col1, col2 = st.columns([1,2])
+        with col1:
+            generate_wordcloud_from_mongodb(st.session_state.codes_key)
 
-            with col2:
-                #choose = st.selectbox("Choose an option", ("Choose", "View Data", "Download Data"))
-                code = None
-                code = view_data(st.session_state.codes_key)
-                if code != None:
-                     download_csv(code)
-
-
-            # #can apply customisation to almost all the properties of the card, including the progress bar
-            # theme_bad = {'bgcolor': '#FFF0F0','title_color': 'red','content_color': 'red','icon_color': 'red', 'icon': 'fa fa-times-circle'}
-            # theme_neutral = {'bgcolor': '#f9f9f9','title_color': 'orange','content_color': 'orange','icon_color': 'orange', 'icon': 'fa fa-question-circle'}
-            # theme_good = {'bgcolor': '#EFF8F7','title_color': 'green','content_color': 'green','icon_color': 'green', 'icon': 'fa fa-check-circle'}
-
-            
-            #st.info("Demo only = feature is being worked on to analyse the sentiment of the conversations of the students")
-            #cc = st.columns(3)
-
-            # with cc[0]:
-            #  # can just use 'good', 'bad', 'neutral' sentiment to auto color the card
-            #  hc.info_card(title='POSITIVE & GOOD', content='All good!', sentiment='good',bar_value=77)
-
-            # with cc[1]:
-            #  hc.info_card(title='NEUTRAL & OBJECTIVE', content='Normal', sentiment='neutral',bar_value=55)
-
-            # with cc[2]:
-            #  hc.info_card(title='NEGATIVE & POOR', content='Negative feelings',bar_value=12,theme_override=theme_bad)
-
+        with col2:
+            #choose = st.selectbox("Choose an option", ("Choose", "View Data", "Download Data"))
+            code = None
+            code = view_data(st.session_state.codes_key)
+            if code != None:
+                 download_csv(code)
         
 
     elif tabs == 'Chatbot':
@@ -845,52 +750,44 @@ def main():
         description="OpenAI chabot as a learning support tool",
         color_name="light-blue-70",
         )
-
         
-
-
-        #if teacher has login skip this part
-        if 'vta_key' not in st.session_state or st.session_state.vta_key != True:
-            st.info("This tool is available to all teachers but may be restricted to certain students classes")
-            st.error("Please log in to verify if you are eligible to access this feature")
-        elif st.session_state.vta_key == True:
-            prompt = ""
-            placeholder3 = st.empty()
-            c1,c2 = st.columns([1,2])
-            with c1:
-                if st.session_state.prompt_first_key == True:
-                    placeholder4 = st.empty()
-                    with placeholder4.form("Chatbot Start"):
-                        # Ask user for assessment type (Oral or Content)
-                        name = st.text_input("Enter your name please")
-                        # Ask user for level (Primary 1 to Secondary 5)
-                        level = st.selectbox("Choose level:", ["Primary " + str(i) for i in range(1, 7)] + ["Secondary " + str(i) for i in range(1, 6)])
-                        # Ask user for subject (English, Mother Tongue, Science, Math, Humanities)
-                        subject = st.selectbox("Choose subject:", ["English", "Mother Tongue", "Science", "Math", "Humanities"])
-                        # Ask user for topic
-                        topic = st.text_input("Based on the subject above, enter a topic that you are learning about:")
-                        submitted = st.form_submit_button("Submit")
-                        if submitted:
-                            if topic == "":
-                                st.error('Please type in a topic')
-                                st.stop()
-                            else:
-                                st.session_state["temp"] = f"Hi I am {name}, I am a {level} student studying {subject} and would like to know more about {topic}."
-                                st.session_state.prompt_bot_key = name, level, subject, topic
-                                st.session_state.prompt_first_key = False
-                                placeholder4.empty()
-            cache_api()
-            if st.session_state["temp"] != "":
-                #st.write("Inside here")
-                result = chat_bot(st.session_state["temp"])
-                if result != False:
-                    vta_code, question, answer, dt_string = result
-                    name, level, subject, topic = st.session_state.prompt_bot_key
-                    data_collection.insert_one({"vta_code": vta_code, "function":CB, "topic":topic, "subject":subject, "level":level, "name": name,"question": question, "response": answer, "created_at": dt_string})
-                #st.write("**:red[Chat History]**")
-                #messages(st.session_state.chat_msg)
-            if st.session_state.prompt_first_key == False:
-                st.text_input("Enter your question", key="text", value=prompt, on_change=clear_text)
+        prompt = ""
+        placeholder3 = st.empty()
+        c1,c2 = st.columns([1,2])
+        with c1:
+            if st.session_state.prompt_first_key == True:
+                placeholder4 = st.empty()
+                with placeholder4.form("Chatbot Start"):
+                    # Ask user for assessment type (Oral or Content)
+                    name = st.text_input("Enter your name please")
+                    # Ask user for level (Primary 1 to Secondary 5)
+                    level = st.selectbox("Choose level:", ["Primary " + str(i) for i in range(1, 7)] + ["Secondary " + str(i) for i in range(1, 6)])
+                    # Ask user for subject (English, Mother Tongue, Science, Math, Humanities)
+                    subject = st.selectbox("Choose subject:", ["English", "Mother Tongue", "Science", "Math", "Humanities"])
+                    # Ask user for topic
+                    topic = st.text_input("Based on the subject above, enter a topic that you are learning about:")
+                    submitted = st.form_submit_button("Submit")
+                    if submitted:
+                        if topic == "":
+                            st.error('Please type in a topic')
+                            st.stop()
+                        else:
+                            st.session_state["temp"] = f"Hi I am {name}, I am a {level} student studying {subject} and would like to know more about {topic}."
+                            st.session_state.prompt_bot_key = name, level, subject, topic
+                            st.session_state.prompt_first_key = False
+                            placeholder4.empty()
+        cache_api()
+        if st.session_state["temp"] != "":
+            #st.write("Inside here")
+            result = chat_bot(st.session_state["temp"])
+            if result != False:
+                vta_code, question, answer, dt_string = result
+                name, level, subject, topic = st.session_state.prompt_bot_key
+                data_collection.insert_one({"vta_code": vta_code, "function":CB, "topic":topic, "subject":subject, "level":level, "name": name,"question": question, "response": answer, "created_at": dt_string})
+            #st.write("**:red[Chat History]**")
+            #messages(st.session_state.chat_msg)
+        if st.session_state.prompt_first_key == False:
+            st.text_input("Enter your question", key="text", value=prompt, on_change=clear_text)
 
 
     elif tabs == 'Text Analysis': #complete
@@ -902,15 +799,15 @@ def main():
         #models = ["en_core_web_sm", "en_core_web_md"]
         #default_text = "Sundar Pichai is the CEO of Google."
         #spacy_streamlit.visualize(models, default_text)
-        if 'vta_key' not in st.session_state or st.session_state.vta_key != True:
-            st.info("This tool is available to all teachers but may be restricted to certain students classes")
-            st.error("Please log in to verify if you are eligible to access this feature")
-        elif st.session_state.vta_key == True:
-            text_area = st.text_area("Input your text data", height=height)
-            if st.button('Process my text'):
-                nlp = spacy.load("en_core_web_sm")
-                doc = nlp(text_area)
-                visualize_ner(doc, labels=nlp.get_pipe("ner").labels)
+        # if 'vta_key' not in st.session_state or st.session_state.vta_key != True:
+        #     st.info("This tool is available to all teachers but may be restricted to certain students classes")
+        #     st.error("Please log in to verify if you are eligible to access this feature")
+        # elif st.session_state.vta_key == True:
+        text_area = st.text_area("Input your text data", height=height)
+        if st.button('Process my text'):
+            nlp = spacy.load("en_core_web_sm")
+            doc = nlp(text_area)
+            visualize_ner(doc, labels=nlp.get_pipe("ner").labels)
                     
 
     elif tabs == 'Knowledge Map':
@@ -919,108 +816,75 @@ def main():
         description="Generating Mindmap using AI",
         color_name="orange-70",
         )
-        if 'vta_key' not in st.session_state or st.session_state.vta_key != True:
-            st.info("This tool is available to all teachers but may be restricted to certain students classes")
-            st.error("Please log in to verify if you are eligible to access this feature")
-        elif st.session_state.vta_key == True:
-            c1,c2 = st.columns([2,2])
-            with c1:
-                cache_api()
-                st.write("**:red[Step 1. Enter the parameters for your knowldege map]**")
-                uml_txt = generate_mindmap()
-                st.session_state.temp_uml = uml_txt
-            with c2:
-                st.write("**:blue[Step 2. Check and confirmed the PlantUML syntax]**")
-                uml_input = st.text_area("You may modify the code to before generating the KM", value=st.session_state.temp_uml)
-
-            st.info("Below is the generated Knowledge Map")
-            if uml_input != 'None':
-                image = render_diagram(uml_input)
-                st.image(image)
-                        
+        
+        c1,c2 = st.columns([2,2])
+        with c1:
+            cache_api()
+            st.write("**:red[Step 1. Enter the parameters for your knowldege map]**")
+            uml_txt = generate_mindmap()
+            st.session_state.temp_uml = uml_txt
+        with c2:
+            st.write("**:blue[Step 2. Check and confirmed the PlantUML syntax]**")
+            uml_input = st.text_area("You may modify the code to before generating the KM", value=st.session_state.temp_uml)
+        st.info("Below is the generated Knowledge Map")
+        if uml_input != 'None':
+            image = render_diagram(uml_input)
+            st.image(image)
+                    
         
     elif tabs == 'Assess Myself':
         colored_header(
-        label="Feynman Principle of explanation",
+        label="If you can explain, you can understand",
         description="Using AI to evaluate your explanation",
         color_name="blue-green-70",
         )
-        pass
-        if 'vta_key' not in st.session_state or st.session_state.vta_key != True:
-            st.info("This tool is available to all teachers but may be restricted to certain students classes")
-            st.error("Please log in to verify if you are eligible to access this feature")
-        elif st.session_state.vta_key == True:
-            c1,c2 = st.columns([1,2])
-            with c1:
-                name = st.text_input("Enter your name:")
-                # Ask user for assessment type (Oral or Content)
-                assessment_type = st.radio("Choose assessment type:", ("Oral Assessment", "Content Assessment"))
-                # Ask user for level (Primary 1 to Secondary 5)
-                level = st.selectbox("Choose level:", ["Primary " + str(i) for i in range(1, 7)] + ["Secondary " + str(i) for i in range(1, 6)])
-                # Ask user for subject (English, Mother Tongue, Science, Math, Humanities)
-                subject = st.selectbox("Choose subject:", ["English", "Mother Tongue", "Science", "Math", "Humanities"])
+        
+        c1,c2 = st.columns([1,2])
+        with c1:
+            name = st.text_input("Enter your name:")
+            # Ask user for assessment type (Oral or Content)
+            assessment_type = st.radio("Choose assessment type:", ("Oral Assessment", "Content Assessment"))
+            # Ask user for level (Primary 1 to Secondary 5)
+            level = st.selectbox("Choose level:", ["Primary " + str(i) for i in range(1, 7)] + ["Secondary " + str(i) for i in range(1, 6)])
+            # Ask user for subject (English, Mother Tongue, Science, Math, Humanities)
+            subject = st.selectbox("Choose subject:", ["English", "Mother Tongue", "Science", "Math", "Humanities"])
+            # Ask which language
+            selected_language, selected_language_code = select_language()
+            # Ask user for topic
+            topic = st.text_input("Enter topic:")
+            #st.session_state.prompt_key = name, assessment_type, level, subject, topic
+                        
+        with c2:
+            uploaded_file = st.file_uploader("Upload an image file to guide your recording")
+            if uploaded_file is not None:
+                st.image(uploaded_file)
 
-                # Ask user for topic
-                topic = st.text_input("Enter topic:")
-                #st.session_state.prompt_key = name, assessment_type, level, subject, topic
-                            
-            with c2:
-                uploaded_file = st.file_uploader("Upload an image file to guide your recording")
-                if uploaded_file is not None:
-                    st.image(uploaded_file)
-
-            st.info("Click on the record button to start your recording")
-            #name, assessment_type, level, subject, topic = st.session_state.prompt_key
-            #st.write(topic)
-            if topic == "":
-                st.error("Please type in a topic that you would be sharing about")
+        st.info("Click on the record button to start your recording")
+        #name, assessment_type, level, subject, topic = st.session_state.prompt_key
+        #st.write(topic)
+        if topic == "":
+            st.error("Please type in a topic that you would be sharing about")
+        else:
+            # Generate GPT prompt based on user inputs
+            prompt = f"The following transcript is spoken by a {level} student on the subject {subject} for {topic} in {selected_language}."
+            #st.write(prompt)
+            cache_api()
+            transcript = record_myself(selected_language_code)
+            
+            #st.session_state.prompt_key = prompt, transcript, assessment_type, level
+            if transcript == None or transcript == "":
+                st.info("Feedback of your explanation (Your feedback may take a while to appear, kindly wait for a response before clicking refresh")
             else:
-                # Generate GPT prompt based on user inputs
-                prompt = f"The following transcript is spoken by a {level} student on the subject {subject} for {topic}."
-                #st.write(prompt)
-                cache_api()
-                transcript = record_myself()
-                #st.session_state.prompt_key = prompt, transcript, assessment_type, level
-                if transcript == None or transcript == "":
-                    st.info("Feedback of your explanation (Your feedback may take a while to appear, kindly wait for a response before clicking refresh")
-                else:
+                if st.button("I am happy with my recordings, please assess me now!"):
                     st.write(f"This is your spoken transcript: :green[{transcript}]")
                     #st.write(transcript)
                     st.info("Feedback of your explanation (Your feedback may take a while to appear, kindly wait for a response before clicking refresh)")
-                    answer = assessment_prompt(prompt, transcript, assessment_type, level)
+                    answer = assessment_prompt(prompt, transcript, assessment_type, level, selected_language)
                     now = datetime.now()
                     # dd/mm/YY H:M:S
                     dt_string = now.strftime("%d/%m/%Y %H:%M:%S")
                     data_collection.insert_one({"vta_code": st.session_state.vta_code, "function":AU, "topic":topic, "subject":subject, "level":level, "name": name,"question": transcript, "response": answer, "created_at": dt_string})
-                #assessment_prompt(prompt, transcript, assessment_type, level)
 
-    # elif tabs == 'Data Analytics':
-    #     colored_header(
-    #     label="Data analyser",
-    #     description="Data tools to auto generate trends and patterns visually",
-    #     color_name="yellow-70",
-    #     )
-    #     #st.write("**This tool will auto generate statistics on your data in CSV format**")
-    #     st.info("Note that your data will not be stored in the server, click x to remove the file")
-    #     st.warning(":red[ ⚠️ Do not upload any confidential or sensitive data]")
-    #     c1,c2 = st.columns([2,2])
-
-    #     with c1:
-    #         if 'vta_key' not in st.session_state or st.session_state.vta_key == False:
-    #             placeholder3 = st.empty()
-    #             with placeholder3:
-    #                 if check_vta_code() == True:
-    #                     placeholder3.empty()
-    #         if st.session_state.vta_key == True:
-
-    #             file = st.file_uploader("Select a CSV file", type="csv")
-    #             if file:
-    #                 df = pd.read_csv(file)
-    #                 pr = df.profile_report()
-    #                 st_profile_report(pr)
- 
-    #     with c2:
-    #         pass
 
     elif tabs == 'Settings': #set the different settings for each AI tools {{"settings": "chatbot", "temperature:"},{},{}}
         colored_header(
@@ -1028,63 +892,203 @@ def main():
         description="Adjust the parameters to fine tune your AI engine",
         color_name="green-70",
         )
-        pass
-        if 'login_key' not in st.session_state or st.session_state.login_key == False:
-            st.info("Data page accessible by educators only")
-            st.error("Please log in to access this feature")
-        elif st.session_state.login_key == True:
-            col1, col2 = st.columns([2,2])
-            with col1:
-                with st.form("General Settings"):
-                    st.write("**:red[General Settings]**")
-                    update_api = st.text_input("Please enter your API Key")
-                    update_password1 = st.text_input("Enter your new password")
-                    update_password2 = st.text_input("Enter your new password again")
-                    if update_password1 != update_password2 or update_password1 == "":
-                        st.error("Password does not match or password blank")
-                        password_update = False
+       
+        col1, col2 = st.columns([2,2])
+        with col1:
+            with st.form("General Settings"):
+                st.write("**:red[General Settings]**")
+                update_api = st.text_input("Please enter your API Key")
+                update_password1 = st.text_input("Enter your new password")
+                update_password2 = st.text_input("Enter your new password again")
+                if update_password1 != update_password2 or update_password1 == "":
+                    st.error("Password does not match or password blank")
+                    password_update = False
+                else:
+                    password_update = True
+                    hashed_password = hashlib.sha256(update_password1.encode()).hexdigest()
+                submitted = st.form_submit_button("Save Changes")
+                if submitted:
+                    if password_update == False:
+                        st.error("Changes not save, please verify your passwords again")
                     else:
-                        password_update = True
-                        hashed_password = hashlib.sha256(update_password1.encode()).hexdigest()
-                    submitted = st.form_submit_button("Save Changes")
+                        st.success("Changes Saved!")
+                        #user_info_collection = db["user_info"]
+                        user_info_collection.update_one({"tch_code": st.session_state.vta_code},{"$set": {"pass_key": hashed_password, "api_key": update_api}})
+            
+
+                         
+        with col2:
+            if st.session_state.login_key == True:
+                with st.form("Class Settings"):
+                    st.write("**:orange[Class Tools Settings]**")
+                    
+                    result = select_tabs()
+                    if result == False:
+                        pass
+                    else:
+                        tabs, icons = result
+                                    
+                    submitted = st.form_submit_button("Submit")
                     if submitted:
-                        if password_update == False:
-                            st.error("Changes not save, please verify your passwords again")
-                        else:
-                            st.success("Changes Saved!")
-                            #user_info_collection = db["user_info"]
-                            user_info_collection.update_one({"tch_code": st.session_state.vta_code},{"$set": {"pass_key": hashed_password, "api_key": update_api}})
-                             
-            with col2:
-                if st.session_state.login_key == True:
-                    with st.form("Class Settings"):
-                        st.write("**:red[Class Tools Settings]**")
-                        
-                        result = select_tabs()
                         if result == False:
                             pass
                         else:
-                            tabs, icons = result
-                                        
-                        submitted = st.form_submit_button("Submit")
-                        if submitted:
-                            if result == False:
-                                pass
-                            else:
-                                user_info_collection.update_one({"tch_code": st.session_state.vta_code},{"$set": {"name_settings": tabs, "icon_settings": icons}})
-                                st.success("Changes Saved!")
-                    with st.form("Audio Settings"):
-                        st.write("**:red[Assess Myself Settings]**")
-                        value = st.slider('Select the duration of the students recording in secs', 5, 30, 10, 1)             
-                        submitted = st.form_submit_button("Submit")
-                        if submitted:
-                            user_info_collection.update_one({"tch_code": st.session_state.vta_code},{"$set": {"audio_settings": value}})
+                            user_info_collection.update_one({"tch_code": st.session_state.vta_code},{"$set": {"name_settings": tabs, "icon_settings": icons}})
                             st.success("Changes Saved!")
+                with st.form("Audio Settings"):
+                    st.write("**:blue[Assess Myself Settings]**")
+                    value = st.slider('Select the duration of the students recording in secs', 5, 30, st.session_state.au_settings_key["au_duration"], 1)             
+                    submitted = st.form_submit_button("Submit")
+                    if submitted:
+                        st.session_state.au_settings_key["au_duration"] = value
+                        user_info_collection.update_one({"tch_code": st.session_state.vta_code},{"$set": {"audio_settings": value}})
+                        st.success("Changes Saved!")
+        st.info("Chatbot Settings")
+        col1, col2 = st.columns([2,2])
+        with col1:
+            with st.form("Bot Settings Form"):
+                st.write("**:green[Bot Settings]**")
+                st.warning("""**:red[(Changing these parameters will change the behavior of your Bot)]**""")
+                #st.write(st.session_state.bot_key)
+                bot_settings = st.session_state.bot_key.copy()
                 
-                #st.write("Knowldege Map Settings")
+                # Dropdown for bot selection
+                bot_options = st.secrets['bot_options']
+                bot_settings["cb_bot"] = st.selectbox('Bot', bot_options, index=bot_options.index(st.session_state.bot_key["cb_bot"]))
+                
+                # Text area for default template
+                default_template = st.text_area('Current Template for Conversational Bot', value=bot_settings["cb_template"], height=400)
+                revert_default = st.checkbox('Revert to default', key="default_template")
+                if revert_default:
+                    default_template = st.secrets['template']
+                bot_settings["cb_template"] = default_template
+                
+                #Text area for system template
+                system_template = st.text_area('OpenAI System Current Template', value=bot_settings["cb_system"], height=400)
+                revert_system= st.checkbox('Revert to default', key="system")
+                if revert_system:
+                    system_template = st.secrets['sys_template']
+                bot_settings["cb_system"] = system_template
 
-                #st.write("Assess Myself Settings")
-                #set duration
+                #Text area for assistant template
+                assistant_template = st.text_area('OpenAI Assistant Current Template', value=bot_settings["cb_assistant"], height=400)
+                revert_assist= st.checkbox('Revert to default', key="assistant")
+                if revert_assist:
+                    assistant_template = st.secrets['ast_template']
+                bot_settings["cb_assistant"] = assistant_template
+
+                
+                submitted = st.form_submit_button("Submit")
+                if submitted:
+                    st.session_state.bot_key = bot_settings
+                    user_info_collection.update_one({"tch_code": st.session_state.vta_code}, {"$set": {"bot_settings": bot_settings}})
+                    st.success("Changes Saved!")
+        with col2:
+            with st.form("CB Settings Form"):
+                st.write("**:green[Chatbot Parameters Settings]**")
+                st.warning("""**:red[(Changing these parameters will change the behavior of your Chatbot)]**""")
+                # Dropdown for model
+                engine_options = st.secrets['engine_options']
+                model = st.selectbox("Model", options=engine_options, index=engine_options.index(st.session_state.cb_settings_key["cb_engine"]))
+                # Slider for temperature
+                temperature = st.slider('Temperature', min_value=0.1, max_value=5.0, value=st.session_state.cb_settings_key["cb_temperature"], step=0.1)
+                # Slider for max tokens
+                max_tokens = st.slider('Max Tokens', min_value=10, max_value=2048, value=st.session_state.cb_settings_key["cb_max_tokens"], step=10)
+                # Slider for n
+                n = st.slider('N', min_value=1, max_value=10, value=st.session_state.cb_settings_key["cb_n"], step=1)
+                # Slider for presence penalty
+                presence_penalty = st.slider('Presence Penalty', min_value=0.0, max_value=2.0, value=st.session_state.cb_settings_key["cb_presence_penalty"], step=0.1)
+                # Slider for frequency penalty
+                frequency_penalty = st.slider('Frequency Penalty', min_value=0.0, max_value=2.0, value=st.session_state.cb_settings_key["cb_frequency_penalty"], step=0.1)
+                revert = st.checkbox('Warning by checking this box, it will set the default values', key="cb")
+                if revert:
+                    model = st.secrets["cb_engine"]
+                    temperature = st.secrets["cb_temperature"]
+                    max_tokens = st.secrets["cb_max_tokens"]
+                    n = st.secrets["cb_n"]
+                    presence_penalty = st.secrets["cb_presence_penalty"]
+                    frequency_penalty = st.secrets["cb_frequency_penalty"]
+
+                submitted = st.form_submit_button("Submit")
+                if submitted:
+                    st.session_state.cb_settings_key = {
+                        "cb_engine": model,
+                        "cb_temperature": temperature,
+                        "cb_max_tokens": max_tokens,
+                        "cb_n": n,
+                        "cb_presence_penalty": presence_penalty,
+                        "cb_frequency_penalty": frequency_penalty
+                    }
+                    user_info_collection.update_one({"tch_code": st.session_state.vta_code}, {"$set": {"cb_settings": st.session_state.cb_settings_key}})
+                    st.success("Changes Saved!")
+
+
+        st.info("Knowledge Mapping and Assess Myself Settings")
+        col1, col2 = st.columns([2,2])
+        with col1:
+            with st.form("KM Settings Form"):
+                st.write("**:green[Knowledge Mapping Parameters Settings]**")
+                st.warning("""**:red[(Changing these parameters will change the behavior of your Knowledge Model)]**""")
+                st.write("Model options:")
+                model_options = st.secrets['engine_options']
+                km_engine = st.selectbox('Model', model_options, key="km_engine")
+                km_temperature = st.slider('Temperature', min_value=0.1, max_value=1.0, step=0.1, value=st.session_state.km_settings_key["km_temperature"])
+                km_max_tokens = st.slider('Max Tokens', min_value=10, max_value=2048, step=10, value=st.session_state.km_settings_key["km_max_tokens"])
+                km_n = st.slider('N-gram Size', min_value=1, max_value=5, step=1, value=st.session_state.km_settings_key["km_n"])
+                km_presence_penalty = st.slider('Presence Penalty', min_value=0.0, max_value=2.0, step=0.1, value=st.session_state.km_settings_key["km_presence_penalty"])
+                km_frequency_penalty = st.slider('Frequency Penalty', min_value=0.0, max_value=2.0, step=0.1, value=st.session_state.km_settings_key["km_frequency_penalty"])
+                revert = st.checkbox('Warning by checking this box, it will set the default values', key="km")
+                if revert:
+                    model = st.secrets["km_engine"]
+                    temperature = st.secrets["km_temperature"]
+                    max_tokens = st.secrets["km_max_tokens"]
+                    n = st.secrets["km_n"]
+                    presence_penalty = st.secrets["km_presence_penalty"]
+                    frequency_penalty = st.secrets["km_frequency_penalty"]
+                submitted = st.form_submit_button("Submit")
+                if submitted:
+                    st.session_state.km_settings_key = {
+                        "km_engine": km_engine,
+                        "km_temperature": km_temperature,
+                        "km_max_tokens": km_max_tokens,
+                        "km_n": km_n,
+                        "km_presence_penalty": km_presence_penalty,
+                        "km_frequency_penalty": km_frequency_penalty,
+                    }
+                    user_info_collection.update_one({"tch_code": st.session_state.vta_code}, {"$set": {"km_settings": st.session_state.km_settings_key}})
+                    st.success("Changes Saved!")
+        with col2:
+            with st.form("AU Settings Form"):
+                st.write("**:green[Assess Myself Parameters Settings]**")
+                st.warning("""**:red[(Changing these parameters will change the behavior of your AU model)]**""")
+                st.write("Model options:")
+                model_options = st.secrets['engine_options']
+                au_engine = st.selectbox('Model', model_options, key="au_engine")
+                au_temperature = st.slider('Temperature', min_value=0.1, max_value=1.0, step=0.1, value=st.session_state.au_settings_key["au_temperature"])
+                au_max_tokens = st.slider('Max Tokens', min_value=10, max_value=2048, step=10, value=st.session_state.au_settings_key["au_max_tokens"])
+                au_n = st.slider('N-gram Size', min_value=1, max_value=5, step=1, value=st.session_state.au_settings_key["au_n"])
+                au_presence_penalty = st.slider('Presence Penalty', min_value=0.0, max_value=2.0, step=0.1, value=st.session_state.au_settings_key["au_presence_penalty"])
+                au_frequency_penalty = st.slider('Frequency Penalty', min_value=0.0, max_value=2.0, step=0.1, value=st.session_state.au_settings_key["au_frequency_penalty"])
+                revert = st.checkbox('Warning by checking this box, it will set the default values', key="au")
+                if revert:
+                    model = st.secrets["au_engine"]
+                    temperature = st.secrets["au_temperature"]
+                    max_tokens = st.secrets["au_max_tokens"]
+                    n = st.secrets["au_n"]
+                    presence_penalty = st.secrets["au_presence_penalty"]
+                    frequency_penalty = st.secrets["au_frequency_penalty"]
+                submitted = st.form_submit_button("Submit")
+                if submitted:
+                    st.session_state.au_settings_key = {
+                        "au_engine": au_engine,
+                        "au_temperature": au_temperature,
+                        "au_max_tokens": au_max_tokens,
+                        "au_n": au_n,
+                        "au_presence_penalty": au_presence_penalty,
+                        "au_frequency_penalty": au_frequency_penalty,
+                    }
+                    user_info_collection.update_one({"tch_code": st.session_state.vta_code}, {"$set": {"au_settings": st.session_state.au_settings_key}})
+                    st.success("Changes Saved!")
 
 
     elif tabs == 'Logout':
