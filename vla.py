@@ -293,7 +293,7 @@ def view_data(codes): #viewing of conversational data
         date_range_picker("Select a date range for your data (demo only)")
     if code != "Choose a code":
         if code == "All":
-            documents = list(data_collection.find({}, {'_id': 0}))
+            documents = list(data_collection.find({"vta_code": {"$in": codes}}, {'_id': 0}))
         else:
             documents = list(data_collection.find({"vta_code": code}, {"_id": 0}))
 
