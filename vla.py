@@ -1,4 +1,4 @@
-#version 9 - three chat bots
+#version 10 - To include uploadable resource for reference 
 from streamlit_option_menu import option_menu
 import streamlit as st
 import pymongo
@@ -186,7 +186,7 @@ def teacher_login():
                     st.write("Login successful!")
                     vta_codes = [user.get("vta_code{}".format(i), None) for i in range(1, 6)]
                     api_key = user.get("api_key", None)
-                    st.session_state.bot_key = user.get("bot_settings", st.session_state.bot_key)
+                    st.session_state.bot_key = user.get("bot_settings", st.session_state.bot_key) 
                     st.session_state.cb_settings_key =  user.get("cb_settings", st.session_state.cb_settings_key )
                     st.session_state.au_settings_key =  user.get("au_settings", st.session_state.au_settings_key )
                     st.session_state.km_settings_key =  user.get("km_settings", st.session_state.km_settings_key )
@@ -431,14 +431,25 @@ def openAI_response(user_input):
         frequency_penalty = cb_frequency_penalty)
 
     return response
+@st.cache_resource
+def default_prompt(_prompt):
 
+    _DEFAULT_TEMPLATE = f"""{_prompt}
+                            Current conversation:
+                            {{history}}
+                            Human: {{human_input}}
+                            AI Assistant:"""
+
+    DEFAULT_TEMPLATE = PromptTemplate(
+    input_variables=["history", "human_input"],
+    template=_DEFAULT_TEMPLATE,
+    )
+
+    return DEFAULT_TEMPLATE
 
 @st.cache_resource
 def LLM_chain_response():
-    prompt = PromptTemplate(
-                            input_variables=["history", "human_input"], 
-                            template=st.session_state.bot_key["cb_template"]
-                            )
+
 
     llm = OpenAI(
                 model_name=cb_engine, 
@@ -452,7 +463,7 @@ def LLM_chain_response():
 
     chatgpt_chain = LLMChain(
                                 llm=llm, 
-                                prompt=prompt, 
+                                prompt=default_prompt(st.session_state.bot_key['cb_template']), 
                                 verbose=True, 
                                 memory=ConversationalBufferWindowMemory(k=st.secrets["cb_memory"])
                                 #memory=memory
@@ -461,10 +472,34 @@ def LLM_chain_response():
     return chatgpt_chain
 
 
+@st.cache_resource
+def entity_prompt(_prompt):
+
+    _DEFAULT_ENTITY_MEMORY_CONVERSATION_TEMPLATE = f"""{_prompt}
+                                                    Context:
+                                                    {{entities}}
+                                                    Current conversation:
+                                                    {{history}}
+                                                    Last line:
+                                                    Human: {{input}}
+                                                    You:"""
+
+    ENTITY_MEMORY_CONVERSATION_TEMPLATE = PromptTemplate(
+    input_variables=["entities", "history", "input"],
+    template=_DEFAULT_ENTITY_MEMORY_CONVERSATION_TEMPLATE,
+    )
+
+    return ENTITY_MEMORY_CONVERSATION_TEMPLATE
+
+
+
+
 
 @st.cache_resource
 def LLM_entity_response():
     #ENTITY_MEMORY_CONVERSATION_TEMPLATE=st.session_state.bot_key["cb_entity_template"]
+    
+    
     llm = OpenAI(
                 model_name=cb_engine, 
                 temperature=cb_temperature, 
@@ -479,7 +514,8 @@ def LLM_entity_response():
                                     llm=llm, 
                                     verbose=True,
                                     #prompt=str(st.session_state.bot_key["cb_entity_template"]),
-                                    prompt=ENTITY_MEMORY_CONVERSATION_TEMPLATE,
+                                    prompt = entity_prompt(st.session_state.bot_key['cb_entity']),
+                                    #prompt=ENTITY_MEMORY_CONVERSATION_TEMPLATE,
                                     memory=ConversationEntityMemory(llm=llm)
                                     )
 
@@ -625,11 +661,12 @@ def main():
     if 'tab_key' not in st.session_state:
         st.session_state.tab_key = None
 
+
     if 'bot_key' not in st.session_state:
         st.session_state.bot_key = {
                                       "cb_bot": st.secrets["cb_bot"],
                                       "cb_template": st.secrets['template'],
-                                      #"cb_entity_template": ENTITY_MEMORY_CONVERSATION_TEMPLATE,
+                                      "cb_entity": st.secrets['entity_template'],
                                       "cb_system" : st.secrets['sys_template'],
                                       "cb_assistant" : st.secrets['ast_template']
 
@@ -668,12 +705,12 @@ def main():
                                         }
 
 
-    st.title("✎ POC in the use AI tools using OpenAi GPT-3/Whisper")
+    st.title("✎ CherGpt - Virtual Learning Assistant (Beta V2)")
     #st.sidebar.image('images/cotf_logo.png', width=300)
     
     #st.write(":red[Formerly known as CherGPT]")
     #st.markdown('<style>' + open('./style.css').read() + '</style>', unsafe_allow_html=True)
-    st.sidebar.image('images/string.jpeg', width=225)
+    #st.sidebar.image('images/string.jpeg', width=225)
 
 
     with st.sidebar: #options for sidebar
@@ -717,6 +754,7 @@ def main():
                         pass
                         placeholder2.empty()
         if st.session_state.vta_key == True:
+
             placeholder3.success("You have logged in successfully!")
             st.success("Please click on the Login word in the sidebar to begin!")
 
@@ -955,23 +993,35 @@ def main():
                 # Dropdown for bot selection
                 bot_options = st.secrets['bot_options']
                 bot_settings["cb_bot"] = st.selectbox('Bot', bot_options, index=bot_options.index(st.session_state.bot_key["cb_bot"]))
-                
+                url1 = st.secrets['URL1']
+                url2 = st.secrets['URL1']
+                url3 = st.secrets['URL3']
+                st.markdown("[Information about Conversational Memory Bot](%s)" % url1)
                 # Text area for default template
                 default_template = st.text_area('Current Template for Conversational Bot', value=bot_settings["cb_template"], height=400)
                 revert_default = st.checkbox('Revert to default', key="default_template")
                 if revert_default:
                     default_template = st.secrets['template']
                 bot_settings["cb_template"] = default_template
+
+                # Text area for entity template
+                st.markdown("[Information about Entity Memory Bot](%s)" % url2)
+                entity_template = st.text_area('Current Template for Contextual Bot', value=bot_settings["cb_entity"], height=300)
+                revert_entity = st.checkbox('Revert to default', key="entity_template")
+                if revert_entity:
+                    entity_template = st.secrets['entity_template']
+                bot_settings["cb_entity"] = entity_template
                 
+                st.markdown("[Information about OpenAI System](%s)" % url3)
                 #Text area for system template
-                system_template = st.text_area('OpenAI System Current Template', value=bot_settings["cb_system"], height=400)
+                system_template = st.text_area('OpenAI System Current Template', value=bot_settings["cb_system"], height=150)
                 revert_system= st.checkbox('Revert to default', key="system")
                 if revert_system:
                     system_template = st.secrets['sys_template']
                 bot_settings["cb_system"] = system_template
-
+                st.markdown("[Information about OpenAI Assistant](%s)" % url3)
                 #Text area for assistant template
-                assistant_template = st.text_area('OpenAI Assistant Current Template', value=bot_settings["cb_assistant"], height=400)
+                assistant_template = st.text_area('OpenAI Assistant Current Template', value=bot_settings["cb_assistant"], height=150)
                 revert_assist= st.checkbox('Revert to default', key="assistant")
                 if revert_assist:
                     assistant_template = st.secrets['ast_template']
@@ -1097,6 +1147,7 @@ def main():
         description="Clear all settings and exit",
         color_name="red-70",
         )
+
         st.warning("Click on the logout button to exit the application")
         logout = st.button("Logout")
         if logout:
