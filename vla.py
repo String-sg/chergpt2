@@ -176,6 +176,7 @@ def teacher_login():
     with st.form(key="authenticate"):
         st.write("Please key in your teacher code and password to access the data")
         teacher_code = st.text_input('Teacher code:')
+        teacher_code = teacher_code.lower()
         password = st.text_input('Password:', type="password")
         submit_button = st.form_submit_button(label='Login')
         if submit_button:
