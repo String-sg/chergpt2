@@ -4,7 +4,7 @@ Developed by Joe Tay
 Documentation maintained by Kahhow and Adrian
 Support and access managed by Lance
 
-``
+```
 #This is the secrets.toml file (click on RAW to view the file properly) <br>
 #You need to open a MongoDB account and OpenAPI key to deploy this app to streamlit. <br>
 #You can develop your own function and call the function in the main() , you need to modify the default tab list in secrets.toml to add in a new function
@@ -120,4 +120,4 @@ entity_template = """You are an assistant to a human, powered by a large languag
 
 URL1 = """https://langchain.readthedocs.io/en/latest/modules/memory/examples/chatgpt_clone.html"""
 URL2 = """https://langchain.readthedocs.io/en/latest/modules/memory/examples/entity_summary_memory.html"""
-URL3 = """https://platform.openai.com/docs/guides/chat/introduction""" ``
+URL3 = """https://platform.openai.com/docs/guides/chat/introduction""" ```
