@@ -27,7 +27,7 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 db_host = st.secrets["db_host"]
 #db_host = config['constants']['db_host']
-serper_key = st.secrets["serpapi"]
+#serper_key = st.secrets["serpapi"]
 #serper_key = config['constants']['serpapi']
 db_client = config['constants']['db_client']
 client = pymongo.MongoClient(db_host, tlsCAFile=certifi.where())
