@@ -286,16 +286,20 @@ def dashboard():
 		try:
 			# Retrieve documents including the _id column
 			documents = list(doc_collection.find({"class_access": "Shared resource"}, {'file_id': 0}))
+			if documents:	
+				# Create a DataFrame from the documents
+				r_df = pd.DataFrame(documents)
 
-			# Create a DataFrame from the documents
-			r_df = pd.DataFrame(documents)
+				# Convert the _id column to a string
+				r_df['_id'] = r_df['_id'].astype(str)
 
-			# Convert the _id column to a string
-			r_df['_id'] = r_df['_id'].astype(str)
-
-			# Rename the _id column to 'Document ID'
-			r_df = r_df.rename(columns={'_id': 'Document ID'})
-			AgGrid(r_df, height='400px')
+				# Rename the _id column to 'Document ID'
+				r_df = r_df.rename(columns={'_id': 'Document ID'})
+				AgGrid(r_df, height='400px')
+			else:
+				df = pd.DataFrame(documents)
+				#aggrid_interactive_table(df=df)
+				AgGrid(df, height='400px', key="no_elements")
 		except Exception as e:
 			st.write(f"Error: {e}")
 			return False
