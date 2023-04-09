@@ -1,1 +1,4 @@
 
+[server]
+
+maxUploadSize = 1
