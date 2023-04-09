@@ -2,8 +2,6 @@ import streamlit as st
 import wikipedia
 import openai
 from langchain.agents import tool
-from langchain.utilities import ApifyWrapper
-from apify_client import ApifyClient
 from langchain.chains import RetrievalQA, RetrievalQAWithSourcesChain
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.chat_models import ChatOpenAI
@@ -16,8 +14,8 @@ import configparser
 import os
 config = configparser.ConfigParser()
 config.read('config.ini')
-#serper_key = st.secrets["serpapi"]
-#bing_key = st.secrets["bingapi"]
+serper_key = st.secrets["serpapi"]
+bing_key = st.secrets["bingapi"]
 #serper_key = config['constants']['serpapi']
 #bing_key = config['constants']['bingapi']
 serper_url = config['constants']['serp_url']
@@ -78,63 +76,63 @@ def wikipedia_to_json_string(query: str) -> str:
 		return None
 
 
-@tool
-def google_search_crawl(query: str) -> str:
-	"""
-	Searches Google for the given query and returns the search results
-	with their titles, URLs, and descriptions as a JSON formatted string.
-	"""
-	# Prepare the actor input
-	client = ApifyClient(apify_key)
+# @tool
+# def google_search_crawl(query: str) -> str:
+# 	"""
+# 	Searches Google for the given query and returns the search results
+# 	with their titles, URLs, and descriptions as a JSON formatted string.
+# 	"""
+# 	# Prepare the actor input
+# 	client = ApifyClient(apify_key)
 
-	st.session_state.tool_use = True
-	st.session_state.source_bot == False
-	st.session_state.web_link.append(f'Ref No: {st.session_state.s_count}')
-	run_input = {
-		"queries": query,
-		"maxPagesPerQuery": 1,
-		"resultsPerPage": 2,
-		"countryCode": "sg",
-		"customDataFunction": """async ({ input, $, request, response, html }) => {
-		  return {
-			pageTitle: $('title').text(),
-		  };
-		};""",
-	}
+# 	st.session_state.tool_use = True
+# 	st.session_state.source_bot == False
+# 	st.session_state.web_link.append(f'Ref No: {st.session_state.s_count}')
+# 	run_input = {
+# 		"queries": query,
+# 		"maxPagesPerQuery": 1,
+# 		"resultsPerPage": 2,
+# 		"countryCode": "sg",
+# 		"customDataFunction": """async ({ input, $, request, response, html }) => {
+# 		  return {
+# 			pageTitle: $('title').text(),
+# 		  };
+# 		};""",
+# 	}
 
-	# Run the actor and wait for it to finish
-	run = client.actor("apify/google-search-scraper").call(run_input=run_input)
+# 	# Run the actor and wait for it to finish
+# 	run = client.actor("apify/google-search-scraper").call(run_input=run_input)
 
-	# Fetch the dataset items
-	dataset_items = client.dataset(run["defaultDatasetId"]).list_items().items
+# 	# Fetch the dataset items
+# 	dataset_items = client.dataset(run["defaultDatasetId"]).list_items().items
 
-	# Extract organic results from the dataset items
-	organic_results = []
-	for item in dataset_items:
-		if "organicResults" in item:
-			organic_results = item["organicResults"]
-			break
+# 	# Extract organic results from the dataset items
+# 	organic_results = []
+# 	for item in dataset_items:
+# 		if "organicResults" in item:
+# 			organic_results = item["organicResults"]
+# 			break
 
-	formatted_results = []
-	for result in organic_results:
-		formatted_result = {"title": result["title"], "url": result["url"], "summary": result["description"]}
-		formatted_results.append(formatted_result)
+# 	formatted_results = []
+# 	for result in organic_results:
+# 		formatted_result = {"title": result["title"], "url": result["url"], "summary": result["description"]}
+# 		formatted_results.append(formatted_result)
 
-		# Append the result title and url to st.session_state.web_link
-		st.session_state.web_link.append(f'Ref No: {st.session_state.s_count} - {result["title"]}')
-		#st.session_state.web_link.append(result["title"])
-		st.session_state.web_link.append(result["url"])
+# 		# Append the result title and url to st.session_state.web_link
+# 		st.session_state.web_link.append(f'Ref No: {st.session_state.s_count} - {result["title"]}')
+# 		#st.session_state.web_link.append(result["title"])
+# 		st.session_state.web_link.append(result["url"])
 
-	# Create a dictionary with the query and search_results
-	data = {
-		"query": query,
-		"search_results": formatted_results
-	}
+# 	# Create a dictionary with the query and search_results
+# 	data = {
+# 		"query": query,
+# 		"search_results": formatted_results
+# 	}
 
-	# Convert the data dictionary to a JSON string
-	json_string = json.dumps(data, ensure_ascii=False, indent=4)
+# 	# Convert the data dictionary to a JSON string
+# 	json_string = json.dumps(data, ensure_ascii=False, indent=4)
 
-	return json_string
+# 	return json_string
 
 def extract_organic_results_and_people_also_ask(response_data: dict) -> dict:
 	organic_results = response_data.get('organic', [])
@@ -215,7 +213,7 @@ def extract_bing_results(response_data: dict) -> dict:
     displaylink = first_result.get('displayUrl', '')
     #displayUrl = first_result.get('displayUrl', '')
 
-    st.session_state.web_link.append(title)
+    st.session_state.web_link.append(f'Ref No: {st.session_state.s_count} - {title}')
     st.session_state.web_link.append(displaylink)
 
     snippet_1 = first_result.get('snippet', '')
