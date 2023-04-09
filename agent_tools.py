@@ -45,7 +45,7 @@ def get_wikipedia_data(query, max_results=4):
 						"summary": summary
 					})
 				else:
-					summary = wikipedia.summary(result, sentences=3)
+					summary = wikipedia.summary(result, sentences=1)
 					question_info = {
 						"question": result,
 						"snippet": summary,
