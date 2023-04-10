@@ -14,8 +14,8 @@ import configparser
 import os
 config = configparser.ConfigParser()
 config.read('config.ini')
-serper_key = st.secrets["serpapi"]
-bing_key = st.secrets["bingapi"]
+# serper_key = st.secrets["serpapi"]
+# bing_key = st.secrets["bingapi"]
 #serper_key = config['constants']['serpapi']
 #bing_key = config['constants']['bingapi']
 serper_url = config['constants']['serp_url']
