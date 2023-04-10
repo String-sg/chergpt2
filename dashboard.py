@@ -274,7 +274,7 @@ def dashboard():
 			#documents = list(doc_collection.find({"class_access": "Shared resource"}, {'_id': 0}))
 			df = pd.DataFrame(documents)
 			#aggrid_interactive_table(df=df)
-			AgGrid(df, height='400px',key="data")
+			AgGrid(df, height='400px', key="data")
 		except Exception as e:
 			st.write(f"Error: {e}")
 			return False
@@ -286,7 +286,7 @@ def dashboard():
 		try:
 			# Retrieve documents including the _id column
 			documents = list(doc_collection.find({"class_access": "Shared resource"}, {'file_id': 0}))
-			if documents:	
+			if documents:
 				# Create a DataFrame from the documents
 				r_df = pd.DataFrame(documents)
 
@@ -295,7 +295,7 @@ def dashboard():
 
 				# Rename the _id column to 'Document ID'
 				r_df = r_df.rename(columns={'_id': 'Document ID'})
-				AgGrid(r_df, height='400px', key="elements")
+				AgGrid(r_df, height='400px', key="global_resources")
 			else:
 				df = pd.DataFrame(documents)
 				#aggrid_interactive_table(df=df)
@@ -329,7 +329,7 @@ def dashboard():
 
 				# Rename the _id column to 'Document ID'
 				r_df = r_df.rename(columns={'_id': 'Document ID'})
-				AgGrid(r_df, height='400px'="resources")
+				AgGrid(r_df, height='400px',key="class_resources")
 		except Exception as e:
 			st.write(f"Error: {e}")
 			return False
