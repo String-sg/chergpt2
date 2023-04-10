@@ -20,7 +20,6 @@ db_host = st.secrets["db_host"]
 #db_host = config['constants']['db_host']
 db_client = config['constants']['db_client']
 client = pymongo.MongoClient(db_host, tlsCAFile=certifi.where())
-
 db = client[db_client]
 fs = gridfs.GridFS(db)
 data_collection = db[config['constants']['sd']]
@@ -38,8 +37,8 @@ def generate_resource(vta, flag):
 		if documents == False:
 			return False
 		else:
-			db_generate = generate_data(documents)
-			return db_generate
+			generate_data(documents)
+			return True
 	except Exception as e:
 		st.write(f"Error: {e}")
 		return False
@@ -77,7 +76,7 @@ def find_documents(vta_code, admin_flag):
 			"tch_code": document.get("tch_code"),
 			"file_id": document.get("file_id")
 		}
-		st.write(result)
+		#st.write(result)
 		results.append(result)
 	# If no documents are found, return False
 	if not results:
@@ -103,7 +102,7 @@ def format_string(input_string):
 	return output_string
 
  
-def generate_data(documents):
+def generate_data2(documents):
 	
 	try:
 		full_docs = []
@@ -150,6 +149,61 @@ def generate_data(documents):
 		#st.write(vectordb)
 		vectordb.persist()
 		vectordb = None
+		return True
+	except Exception as e:
+		st.write(f"Error: {e}")
+		return False
+
+def save_files_to_mongodb(temp_dir, tch_code):
+    fs = gridfs.GridFS(db)
+
+    def save_files_recursive(directory, tch_code, root):
+        # Iterate through all files and directories in the given directory
+        for item in os.listdir(directory):
+            item_path = os.path.join(directory, item)
+            if os.path.isfile(item_path):
+                with open(item_path, "rb") as f:
+                    # Save the file in MongoDB with the tch_code and relative_path as metadata
+                    relative_path = os.path.relpath(item_path, root)
+                    fs.put(f, filename=item, tch_code=tch_code, relative_path=relative_path)
+            elif os.path.isdir(item_path):
+                # Recursively save files in subdirectories
+                save_files_recursive(item_path, tch_code, root)
+
+    save_files_recursive(temp_dir, tch_code, temp_dir)
+
+def generate_data(documents):
+	try:
+		full_docs = []
+		all_metadatas = []
+		source = ""
+		topic = ""
+		hyperlinks = ""
+
+		for document in documents:
+			subject = document.get('subject')
+			topic = document.get('topic')
+			hyperlinks = document.get('hyperlinks')
+			source = document.get('source')
+			tch_code = document.get('tch_code')
+			file_id = document.get('file_id')
+			#topic = format_string(topic)
+			pdf_data, filename = download_pdf(file_id)
+
+			with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+				tmp_file.write(pdf_data)
+				tmp_file.flush()
+
+			docs = split_meta_docs(tmp_file.name, source, topic, hyperlinks, tch_code)
+			full_docs.extend(docs)  # Extend the full_docs list with the new docs
+
+		
+		with tempfile.TemporaryDirectory() as temp_dir:
+			embedding= OpenAIEmbeddings()
+			vectordb = Chroma.from_documents(documents=full_docs, embedding=embedding, collection_name=st.session_state.vta_code, persist_directory=temp_dir)
+			#vectordb.persist()
+			save_files_to_mongodb(temp_dir,st.session_state.vta_code)
+			vectordb = None
 		return True
 	except Exception as e:
 		st.write(f"Error: {e}")

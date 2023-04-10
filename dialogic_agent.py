@@ -2,6 +2,7 @@ import streamlit as st
 import wikipedia
 import openai
 import os
+import pymongo
 from langchain.memory import ConversationBufferMemory
 from langchain.chat_models import ChatOpenAI
 from langchain import LLMChain
@@ -16,8 +17,10 @@ from typing import List, Dict
 from langchain.vectorstores import Chroma
 from langchain.chains import ConversationalRetrievalChain
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain
-from agent_tools import wikipedia_to_json_string, document_search, google_search_serp, bing_search_internet
-openai.api_key  = st.session_state.api_key
+from agent_tools import wikipedia_to_json_string, document_search, google_search_serp, bing_search_internet, extract_files_from_mongodb
+
+
+
 
 @st.cache_resource
 def ailc_agent_serp():
@@ -324,10 +327,11 @@ def metacog_agent(): #to be further upgraded by the base agent base class
 	return agent_chain
 
 
+
 @st.cache_resource
-def load_instance_index():
+def load_instance_index(_temp_dir):
 	embeddings = OpenAIEmbeddings()
-	vectordb = Chroma(collection_name=st.session_state.teacher_key, embedding_function=embeddings, persist_directory=st.session_state.teacher_key)
+	vectordb = Chroma(collection_name=st.session_state.teacher_key, embedding_function=embeddings, persist_directory=_temp_dir)
 	return vectordb
 
 
@@ -351,7 +355,7 @@ def ailc_resources_bot(_query): #not in use for now
 				)
 
 
-	vectordb = load_instance_index()
+	vectordb = load_instance_index(load_instance_index(extract_files_from_mongodb(st.session_state.teacher_key)))
 	#st.write(vectordb)
 	#question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
 	#doc_chain = load_qa_with_sources_chain(llm, chain_type="map_reduce")

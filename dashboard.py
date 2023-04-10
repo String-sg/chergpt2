@@ -256,7 +256,6 @@ def check_directory_exists():
 					{"$set": {"db_last_created": formatted_now, "db_description": db_description, "db_subject": db_subject}}
 				)
 				st.success("Database generated successfully. Please click dashboard to refresh")
-				return False
 			else:
 				st.warning("Please provide both a description and a topic.")
 

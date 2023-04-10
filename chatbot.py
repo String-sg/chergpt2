@@ -55,7 +55,7 @@ def main_bot():
 		st.session_state["temp"] = ""
 
 	if 'document_exist' not in st.session_state:
-		st.session_state.document_exist = False
+		st.session_state.document_exist = load_documents()
 
 	if 'data_source' not in st.session_state:
 		st.session_state.data_source = None 
@@ -77,10 +77,6 @@ def main_bot():
 
 	if 'doc_tools_names' not in st.session_state:
 		st.session_state.doc_tools_names = False
-
-	if st.session_state.data_source == None:
-		st.session_state.document_exist = load_documents()
-		#st.write(st.session_state.document_exist)
 
 	c1,c2 = st.columns([5,3])
 	with c1:
@@ -111,29 +107,14 @@ def main_bot():
 	
 def load_documents():
 	try:
-		openai.api_key  = st.session_state.api_key
-		os.environ["OPENAI_API_KEY"] = st.session_state.api_key
-		os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
-		os.environ["LANGCHAIN_HANDLER"] = "langchain" 
-		directory_path = os.path.join(os.getcwd(), st.session_state.teacher_key)
-		if os.path.exists(directory_path):
-			user_info = user_info_collection.find_one({"tch_code": st.session_state.teacher_key})
-			if user_info:
-				if "db_subject" in user_info and "db_description" in user_info:
-					st.session_state.doc_tools_names = {"subject": user_info["db_subject"], "description": user_info["db_description"]}
-				else:
-					return False
-				embeddings = OpenAIEmbeddings()
-				vectordb = Chroma(collection_name=st.session_state.vta_code, embedding_function=embeddings, persist_directory=st.session_state.teacher_key)
-				st.session_state.data_source = vectordb
-				# #st.write(vectordb)
+		user_info = user_info_collection.find_one({"tch_code": st.session_state.teacher_key})
+		if user_info:
+			if "db_subject" in user_info and "db_description" in user_info:
+				st.session_state.doc_tools_names = {"subject": user_info["db_subject"], "description": user_info["db_description"]}
+				st.success('Teacher documents loaded.')
+				return True
 			else:
 				return False
-			st.success('Teacher documents loaded.')
-			return True
-		else:
-			return False
-
 	except Exception as e:
 			st.error(e)
 			return False

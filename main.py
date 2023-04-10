@@ -27,8 +27,6 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 db_host = st.secrets["db_host"]
 #db_host = config['constants']['db_host']
-#serper_key = st.secrets["serpapi"]
-#serper_key = config['constants']['serpapi']
 db_client = config['constants']['db_client']
 client = pymongo.MongoClient(db_host, tlsCAFile=certifi.where())
 db = client[db_client]
@@ -78,8 +76,8 @@ def main():
 
 
 	#st.title("✎ Metacognition prototype")
-	#st.title("🗣️ GPT3.5/4 Dialogic Agent prototype")
-	st.title("✎ CherGpt - Virtual Learning Assistant V2.1)")
+	#st.title("GPT3.5/4 Dialogic Agent prototype")
+	st.title("✎ CherGpt - Virtual Learning Assistant (Beta V2)")
 
 	student_tabs_str = config.get('menu_lists', 'student_tabs')
 	student_tabs = ast.literal_eval(student_tabs_str)

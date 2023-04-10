@@ -1,6 +1,10 @@
 import streamlit as st
 import wikipedia
 import openai
+import pymongo
+import tempfile
+import certifi
+import gridfs
 from langchain.agents import tool
 from langchain.chains import RetrievalQA, RetrievalQAWithSourcesChain
 from langchain.embeddings.openai import OpenAIEmbeddings
@@ -14,12 +18,19 @@ import configparser
 import os
 config = configparser.ConfigParser()
 config.read('config.ini')
-# serper_key = st.secrets["serpapi"]
-# bing_key = st.secrets["bingapi"]
-#serper_key = config['constants']['serpapi']
-#bing_key = config['constants']['bingapi']
-serper_url = config['constants']['serp_url']
-bing_url = config['constants']['bing_url']
+db_host = st.secrets["db_host"]
+#db_host = config['constants']['db_host']
+#serper_key = st.secrets["serpapi"]
+#bing_key = st.secrets["bingapi"]
+#serper_url = config['constants']['serp_url']
+#bing_url = config['constants']['bing_url']
+db_client = config['constants']['db_client']
+client = pymongo.MongoClient(db_host, tlsCAFile=certifi.where())
+db = client[db_client]
+data_collection = db[config['constants']['sd']]
+user_info_collection = db[config['constants']['ui']]
+
+
 
 
 def get_wikipedia_data(query, max_results=4):
@@ -289,14 +300,34 @@ def bing_search_internet(query: str) -> str:
 
 	return json_string
 
+@st.cache_resource
+def extract_files_from_mongodb(tch_code):
+    # Connect to MongoDB
+    fs = gridfs.GridFS(db)
+    # Create a temporary directory called tch_code
+    temp_dir = tempfile.mkdtemp(prefix="tch_code_")
+
+    # Get all the files associated with the given tch_code
+    files = fs.find({"tch_code": tch_code})
+
+    # Write the files to the temporary directory
+    for file in files:
+        # Recreate the directory structure using the relative path metadata
+        file_path = os.path.join(temp_dir, file.relative_path)
+        os.makedirs(os.path.dirname(file_path), exist_ok=True)
+        
+        with open(file_path, "wb") as f:
+            f.write(file.read())
+
+    return temp_dir
 
 
 @st.cache_resource
-def load_instance_index():
+def load_instance_index(_temp_dir):
+	
 	embeddings = OpenAIEmbeddings()
-	vectordb = Chroma(collection_name=st.session_state.teacher_key, embedding_function=embeddings, persist_directory=st.session_state.teacher_key)
+	vectordb = Chroma(collection_name=st.session_state.teacher_key, embedding_function=embeddings, persist_directory=_temp_dir)
 	return vectordb
-
 
 @tool
 def document_search(query: str) ->str:
@@ -308,11 +339,10 @@ def document_search(query: str) ->str:
 	os.environ["OPENAI_API_KEY"] = st.session_state.api_key
 	os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
 	os.environ["LANGCHAIN_HANDLER"] = "langchain" 
-
 	cb_temperature, cb_max_tokens, cb_n, cb_presence_penalty, cb_frequency_penalty = st.session_state.cb_settings_key.values()  
 	cb_engine = st.session_state.engine_key
 
-	docsearch = load_instance_index()
+	docsearch = load_instance_index(extract_files_from_mongodb(st.session_state.teacher_key))
 	retriever = docsearch.as_retriever(search_type="mmr")
 	source_documents = retriever.get_relevant_documents(query)
 	if source_documents:
