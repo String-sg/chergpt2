@@ -12,8 +12,6 @@ from langchain.llms import OpenAI
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.document_loaders.base import Document
 from langchain.indexes import VectorstoreIndexCreator
-from langchain.utilities import ApifyWrapper
-from apify_client import ApifyClient
 from typing import List, Dict
 from langchain.vectorstores import Chroma
 from langchain.chains import ConversationalRetrievalChain
@@ -326,7 +324,7 @@ def metacog_agent(): #to be further upgraded by the base agent base class
 	return agent_chain
 
 
-
+@st.cache_resource
 def load_instance_index():
 	embeddings = OpenAIEmbeddings()
 	vectordb = Chroma(collection_name=st.session_state.teacher_key, embedding_function=embeddings, persist_directory=st.session_state.teacher_key)
@@ -352,7 +350,9 @@ def ailc_resources_bot(_query): #not in use for now
 				frequency_penalty = cb_frequency_penalty
 				)
 
+
 	vectordb = load_instance_index()
+	#st.write(vectordb)
 	#question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
 	#doc_chain = load_qa_with_sources_chain(llm, chain_type="map_reduce")
 	qa = ConversationalRetrievalChain.from_llm(llm, vectordb.as_retriever(), return_source_documents=True)

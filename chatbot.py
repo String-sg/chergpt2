@@ -123,10 +123,8 @@ def load_documents():
 					st.session_state.doc_tools_names = {"subject": user_info["db_subject"], "description": user_info["db_description"]}
 				else:
 					return False
-				# embeddings = OpenAIEmbeddings()
-				# #persist_directory = st.session_state.teacher_key
-				# vectordb = Chroma(collection_name=st.session_state.vta_code, embedding_function=embeddings, persist_directory=st.session_state.teacher_key)
-				# #vectordb = FAISS.load_local(st.session_state.teacher_key, embeddings)
+				embeddings = OpenAIEmbeddings()
+				vectordb = Chroma(collection_name=st.session_state.vta_code, embedding_function=embeddings, persist_directory=st.session_state.teacher_key)
 				st.session_state.data_source = vectordb
 				# #st.write(vectordb)
 			else:
