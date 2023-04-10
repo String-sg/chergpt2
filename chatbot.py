@@ -127,7 +127,7 @@ def load_documents():
 				# #persist_directory = st.session_state.teacher_key
 				# vectordb = Chroma(collection_name=st.session_state.vta_code, embedding_function=embeddings, persist_directory=st.session_state.teacher_key)
 				# #vectordb = FAISS.load_local(st.session_state.teacher_key, embeddings)
-				# st.session_state.data_source = vectordb
+				st.session_state.data_source = vectordb
 				# #st.write(vectordb)
 			else:
 				return False
