@@ -18,7 +18,7 @@ from typing import List, Dict
 from langchain.vectorstores import Chroma
 from langchain.chains import ConversationalRetrievalChain
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain
-from agent_tools import wikipedia_to_json_string, google_search_crawl, document_search, google_search_serp, bing_search_internet
+from agent_tools import wikipedia_to_json_string, document_search, google_search_serp, bing_search_internet
 openai.api_key  = st.session_state.api_key
 
 @st.cache_resource
