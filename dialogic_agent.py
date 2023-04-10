@@ -332,7 +332,7 @@ def load_instance_index():
 	vectordb = Chroma(collection_name=st.session_state.teacher_key, embedding_function=embeddings, persist_directory=st.session_state.teacher_key)
 	return vectordb
 
-@st.cache_resource
+
 def ailc_resources_bot(_query): #not in use for now 
 	if 'chat_history' not in st.session_state:
 		st.session_state.chat_history = [] 
