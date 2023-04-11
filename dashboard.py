@@ -7,7 +7,6 @@ import certifi
 import pypdf
 import io
 import os
-import redis
 import gridfs
 from pypdf import PdfReader
 from st_aggrid import AgGrid
