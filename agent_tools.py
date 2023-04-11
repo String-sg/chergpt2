@@ -308,7 +308,7 @@ def extract_files_from_mongodb(_tch_code):
     temp_dir = tempfile.mkdtemp(prefix=_tch_code)
 
     # Get all the files associated with the given tch_code
-    files = fs.find({"tch_code": tch_code})
+    files = fs.find({"tch_code": _tch_code})
 
     # Write the files to the temporary directory
     for file in files:
