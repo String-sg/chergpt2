@@ -6,7 +6,6 @@ import openai
 import os
 import re
 import gridfs
-import pinecone
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.vectorstores import Chroma, FAISS, Pinecone
 from langchain.text_splitter import CharacterTextSplitter
