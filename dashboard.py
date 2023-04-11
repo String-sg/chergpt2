@@ -7,6 +7,7 @@ import certifi
 import pypdf
 import io
 import os
+import redis
 import gridfs
 from pypdf import PdfReader
 from st_aggrid import AgGrid
@@ -248,7 +249,7 @@ def check_directory_exists():
 
 		if generate_button:
 			if db_description and db_subject:
-				generate_resource(st.session_state.vta_code, st.session_state.admin_key)
+				st.info(generate_resource(st.session_state.vta_code, st.session_state.admin_key))
 				now = datetime.now()
 				formatted_now = now.strftime("%d/%m/%Y %H:%M:%S")
 				user_info_collection.update_one(

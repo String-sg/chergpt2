@@ -10,7 +10,7 @@ from langchain.chains import RetrievalQA, RetrievalQAWithSourcesChain
 from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.chat_models import ChatOpenAI
 from langchain import LLMChain
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import Chroma,FAISS
 from typing import List, Dict
 import requests
 import json
@@ -20,16 +20,15 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 db_host = st.secrets["db_host"]
 #db_host = config['constants']['db_host']
-#serper_key = st.secrets["serpapi"]
-#bing_key = st.secrets["bingapi"]
-#serper_url = config['constants']['serp_url']
-#bing_url = config['constants']['bing_url']
+serper_key = st.secrets["serpapi"]
+bing_key = st.secrets["bingapi"]
+serper_url = config['constants']['serp_url']
+bing_url = config['constants']['bing_url']
 db_client = config['constants']['db_client']
 client = pymongo.MongoClient(db_host, tlsCAFile=certifi.where())
 db = client[db_client]
 data_collection = db[config['constants']['sd']]
 user_info_collection = db[config['constants']['ui']]
-
 
 
 
@@ -216,41 +215,41 @@ def google_search_serp(query: str) -> str:
 
 
 def extract_bing_results(response_data: dict) -> dict:
-    organic_results = response_data.get('webPages', {}).get('value', [])
-    first_result = organic_results[0] if len(organic_results) > 0 else {}
-    second_result = organic_results[1] if len(organic_results) > 1 else {}
+	organic_results = response_data.get('webPages', {}).get('value', [])
+	first_result = organic_results[0] if len(organic_results) > 0 else {}
+	second_result = organic_results[1] if len(organic_results) > 1 else {}
 
-    title = first_result.get('name', '')
-    displaylink = first_result.get('displayUrl', '')
-    #displayUrl = first_result.get('displayUrl', '')
+	title = first_result.get('name', '')
+	displaylink = first_result.get('displayUrl', '')
+	#displayUrl = first_result.get('displayUrl', '')
 
-    st.session_state.web_link.append(f'Ref No: {st.session_state.s_count} - {title}')
-    st.session_state.web_link.append(displaylink)
+	st.session_state.web_link.append(f'Ref No: {st.session_state.s_count} - {title}')
+	st.session_state.web_link.append(displaylink)
 
-    snippet_1 = first_result.get('snippet', '')
-    snippet_2 = second_result.get('snippet', '')
+	snippet_1 = first_result.get('snippet', '')
+	snippet_2 = second_result.get('snippet', '')
 
-    combined_snippet = f"{snippet_1} {snippet_2}"
+	combined_snippet = f"{snippet_1} {snippet_2}"
 
-    related_searches = response_data.get('relatedSearches', {}).get('value', [])
-    
-    st.session_state.related_questions = []
-    for i, question_data in enumerate(related_searches[:3]):
-        question = question_data.get('text', '')
-        displayText = question_data.get('displayText', '')
-        link = question_data.get('webSearchUrl', '')
-        question_info = {
-            "question": question,
-            "snippet": displayText,
-            "url": link
-        }
-        st.session_state.related_questions.append(question_info)
+	related_searches = response_data.get('relatedSearches', {}).get('value', [])
+	
+	st.session_state.related_questions = []
+	for i, question_data in enumerate(related_searches[:3]):
+		question = question_data.get('text', '')
+		displayText = question_data.get('displayText', '')
+		link = question_data.get('webSearchUrl', '')
+		question_info = {
+			"question": question,
+			"snippet": displayText,
+			"url": link
+		}
+		st.session_state.related_questions.append(question_info)
 
-    return {
-        "title": title,
-        "url": displaylink,
-        "combined_snippet": combined_snippet
-    }
+	return {
+		"title": title,
+		"url": displaylink,
+		"combined_snippet": combined_snippet
+	}
 
 
 
@@ -278,12 +277,12 @@ def bing_search_internet(query: str) -> str:
 
 	# Call the API
 	try:
-	    response = requests.get(bing_url, headers=headers, params=params)
-	    response.raise_for_status()
-	    response_data = response.json()
+		response = requests.get(bing_url, headers=headers, params=params)
+		response.raise_for_status()
+		response_data = response.json()
 	except Exception as ex:
-	    raise ex
-    
+		raise ex
+	
 	#response_data = json.loads(response.text)
 	#st.write(response_data)
 	#st.write(type(response_data))
@@ -300,32 +299,53 @@ def bing_search_internet(query: str) -> str:
 
 	return json_string
 
+# @st.cache_resource
+# def extract_files_from_mongodb(_tch_code):
+# 	# Connect to MongoDB
+# 	fs = gridfs.GridFS(db)
+# 	# Create a temporary directory called tch_code
+# 	temp_dir = tempfile.mkdtemp(prefix=_tch_code)
+
+# 	# Get all the files associated with the given tch_code
+# 	files = fs.find({"tch_code": _tch_code})
+
+# 	# Write the files to the temporary directory
+# 	for file in files:
+# 		# Recreate the directory structure using the relative path metadata
+# 		file_path = os.path.join(temp_dir, file.relative_path)
+# 		os.makedirs(os.path.dirname(file_path), exist_ok=True)
+		
+# 		with open(file_path, "wb") as f:
+# 			f.write(file.read())
+
+# 	return temp_dir
+
+# @st.cache_resource
+# def extract_files_from_mongodb(_tch_code):
+#     # Connect to MongoDB
+#     fs = gridfs.GridFS(db)
+
+#     # Create a temporary directory called tch_code
+#     temp_dir = tempfile.mkdtemp(prefix=_tch_code)
+
+#     # Get all the files associated with the given tch_code
+#     files = fs.find({"tch_code": _tch_code})
+
+#     # Write the files to the temporary directory
+#     for file in files:
+#         file_path = os.path.join(temp_dir, file.filename)
+#         with open(file_path, "wb") as f:
+#             f.write(file.read())
+
+#     return temp_dir
+
 @st.cache_resource
-def extract_files_from_mongodb(_tch_code):
-    # Connect to MongoDB
-    fs = gridfs.GridFS(db)
-    # Create a temporary directory called tch_code
-    temp_dir = tempfile.mkdtemp(prefix=_tch_code)
-
-    # Get all the files associated with the given tch_code
-    files = fs.find({"tch_code": _tch_code})
-
-    # Write the files to the temporary directory
-    for file in files:
-        # Recreate the directory structure using the relative path metadata
-        file_path = os.path.join(temp_dir, file.relative_path)
-        os.makedirs(os.path.dirname(file_path), exist_ok=True)
-        
-        with open(file_path, "wb") as f:
-            f.write(file.read())
-	
-    return temp_dir
-
-
-def load_instance_index(_temp_dir):
-	
+def load_instance_index(_tch_code):
 	embeddings = OpenAIEmbeddings()
-	vectordb = Chroma(collection_name=st.session_state.teacher_key, embedding_function=embeddings, persist_directory=_temp_dir)
+	#vectordb = Chroma(collection_name=st.session_state.teacher_key, embedding_function=embeddings, persist_directory=_temp_dir)
+	#vectordb = Pinecone.from_existing_index(st.secrets["pine_index"], embeddings, _tch_code)
+	vectordb = FAISS.load_local(_tch_code, embeddings)
+
 	return vectordb
 
 @tool
@@ -341,7 +361,7 @@ def document_search(query: str) ->str:
 	cb_temperature, cb_max_tokens, cb_n, cb_presence_penalty, cb_frequency_penalty = st.session_state.cb_settings_key.values()  
 	cb_engine = st.session_state.engine_key
 
-	docsearch = load_instance_index(extract_files_from_mongodb(st.session_state.teacher_key))
+	docsearch = load_instance_index(st.session_state.teacher_key)
 	retriever = docsearch.as_retriever(search_type="mmr")
 	source_documents = retriever.get_relevant_documents(query)
 	if source_documents:

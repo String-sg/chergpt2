@@ -6,8 +6,9 @@ import openai
 import os
 import re
 import gridfs
+import pinecone
 from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import Chroma, FAISS
+from langchain.vectorstores import Chroma, FAISS, Pinecone
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.document_loaders import PagedPDFSplitter
 import configparser
@@ -37,8 +38,8 @@ def generate_resource(vta, flag):
 		if documents == False:
 			return False
 		else:
-			generate_data(documents)
-			return True
+			ans = generate_data(documents)
+			return ans
 	except Exception as e:
 		st.write(f"Error: {e}")
 		return False
@@ -166,7 +167,7 @@ def delete_files_from_mongodb(tch_code):
         fs.delete(file._id)
 
 
-def save_files_to_mongodb(temp_dir, tch_code):
+def save_files_to_mongodb_recursive(temp_dir, tch_code):
     fs = gridfs.GridFS(db)
 
     def save_files_recursive(directory, tch_code, root):
@@ -184,7 +185,19 @@ def save_files_to_mongodb(temp_dir, tch_code):
 
     save_files_recursive(temp_dir, tch_code, temp_dir)
 
-def generate_data(documents):
+
+def save_files_to_mongodb(temp_dir, tch_code):
+    fs = gridfs.GridFS(db)
+
+    # Iterate through all files in the temp_dir
+    for file in os.listdir(temp_dir):
+        file_path = os.path.join(temp_dir, file)
+        with open(file_path, "rb") as f:
+            # Save the file in MongoDB with the tch_code as metadata
+            fs.put(f, filename=file, tch_code=tch_code)
+
+
+def generate_data3(documents):
 	try:
 		full_docs = []
 		all_metadatas = []
@@ -222,6 +235,42 @@ def generate_data(documents):
 	except Exception as e:
 		st.write(f"Error: {e}")
 		return False
+
+
+def generate_data(documents):
+	try:
+		full_docs = []
+		all_metadatas = []
+		source = ""
+		topic = ""
+		hyperlinks = ""
+
+		for document in documents:
+			subject = document.get('subject')
+			topic = document.get('topic')
+			hyperlinks = document.get('hyperlinks')
+			source = document.get('source')
+			tch_code = document.get('tch_code')
+			file_id = document.get('file_id')
+			#topic = format_string(topic)
+			pdf_data, filename = download_pdf(file_id)
+
+			with tempfile.NamedTemporaryFile(delete=False, suffix=".pdf") as tmp_file:
+				tmp_file.write(pdf_data)
+				tmp_file.flush()
+
+			docs = split_meta_docs(tmp_file.name, source, topic, hyperlinks, tch_code)
+			full_docs.extend(docs)  # Extend the full_docs list with the new docs
+
+		embeddings = OpenAIEmbeddings()
+		db = FAISS.from_documents(full_docs, embeddings)
+		db.save_local(st.session_state.vta_code)
+		return f"VectorStore DB Created for {st.session_state.vta_code}"
+	
+	except Exception as e:
+		st.write(f"Error: {e}")
+		return False
+
 
 
 def split_meta_docs(file, source, topic, hylk, tch_code):

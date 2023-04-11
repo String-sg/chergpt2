@@ -3,7 +3,7 @@ import wikipedia
 import openai
 import os
 import pymongo
-from langchain.memory import ConversationBufferMemory
+from langchain.memory import ConversationBufferMemory, ConversationTokenBufferMemory
 from langchain.chat_models import ChatOpenAI
 from langchain import LLMChain
 from langchain.agents import load_tools, initialize_agent, Tool, tool, ZeroShotAgent, AgentExecutor
@@ -14,11 +14,10 @@ from langchain.embeddings.openai import OpenAIEmbeddings
 from langchain.document_loaders.base import Document
 from langchain.indexes import VectorstoreIndexCreator
 from typing import List, Dict
-from langchain.vectorstores import Chroma
+from langchain.vectorstores import Chroma, FAISS
 from langchain.chains import ConversationalRetrievalChain
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain
-from agent_tools import wikipedia_to_json_string, document_search, google_search_serp, bing_search_internet, extract_files_from_mongodb
-
+from agent_tools import wikipedia_to_json_string, document_search, google_search_serp, bing_search_internet
 
 
 
@@ -144,6 +143,7 @@ def ailc_resource_agent():
 
 		]
 	memory = ConversationBufferMemory(memory_key="chat_history", return_messages=True)
+	#memory=ConversationTokenBufferMemory(llm=llm, max_token_limit=200, return_messages=True),
 
 	agent_chain = initialize_agent(tools, llm, agent="chat-conversational-react-description", verbose=True, memory=memory)
 	
@@ -328,10 +328,15 @@ def metacog_agent(): #to be further upgraded by the base agent base class
 
 
 
+
 @st.cache_resource
-def load_instance_index(_temp_dir):
+def load_instance_index(_tch_code):
 	embeddings = OpenAIEmbeddings()
-	vectordb = Chroma(collection_name=st.session_state.teacher_key, embedding_function=embeddings, persist_directory=_temp_dir)
+	#vectordb = Chroma(collection_name=st.session_state.teacher_key, embedding_function=embeddings, persist_directory=_temp_dir)
+	#vectordb = Pinecone.from_existing_index(st.secrets["pine_index"], embeddings, _tch_code)
+	#extract_files_from_mongodb(_tch_code)
+	vectordb = FAISS.load_local(_tch_code, embeddings)
+
 	return vectordb
 
 
@@ -355,7 +360,8 @@ def ailc_resources_bot(_query): #not in use for now
 				)
 
 
-	vectordb = load_instance_index(extract_files_from_mongodb(st.session_state.teacher_key))
+	#vectordb = load_instance_index(extract_files_from_mongodb(st.session_state.teacher_key))
+	vectordb = load_instance_index(st.session_state.teacher_key)
 	#st.write(vectordb)
 	#question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
 	#doc_chain = load_qa_with_sources_chain(llm, chain_type="map_reduce")
