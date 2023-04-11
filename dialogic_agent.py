@@ -355,7 +355,7 @@ def ailc_resources_bot(_query): #not in use for now
 				)
 
 
-	vectordb = load_instance_index(load_instance_index(extract_files_from_mongodb(st.session_state.teacher_key)))
+	vectordb = load_instance_index(extract_files_from_mongodb(st.session_state.teacher_key))
 	#st.write(vectordb)
 	#question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
 	#doc_chain = load_qa_with_sources_chain(llm, chain_type="map_reduce")
