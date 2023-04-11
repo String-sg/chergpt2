@@ -19,11 +19,11 @@ import os
 config = configparser.ConfigParser()
 config.read('config.ini')
 db_host = st.secrets["db_host"]
-#db_host = config['constants']['db_host']
-#serper_key = st.secrets["serpapi"]
-#bing_key = st.secrets["bingapi"]
-#serper_url = config['constants']['serp_url']
-#bing_url = config['constants']['bing_url']
+db_host = config['constants']['db_host']
+serper_key = st.secrets["serpapi"]
+bing_key = st.secrets["bingapi"]
+serper_url = config['constants']['serp_url']
+bing_url = config['constants']['bing_url']
 db_client = config['constants']['db_client']
 client = pymongo.MongoClient(db_host, tlsCAFile=certifi.where())
 db = client[db_client]
@@ -301,11 +301,11 @@ def bing_search_internet(query: str) -> str:
 	return json_string
 
 @st.cache_resource
-def extract_files_from_mongodb(tch_code):
+def extract_files_from_mongodb(_tch_code):
     # Connect to MongoDB
     fs = gridfs.GridFS(db)
     # Create a temporary directory called tch_code
-    temp_dir = tempfile.mkdtemp(prefix="tch_code_")
+    temp_dir = tempfile.mkdtemp(prefix=_tch_code)
 
     # Get all the files associated with the given tch_code
     files = fs.find({"tch_code": tch_code})
