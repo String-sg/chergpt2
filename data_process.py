@@ -201,7 +201,7 @@ def generate_data(documents):
 		with tempfile.TemporaryDirectory() as temp_dir:
 			embedding= OpenAIEmbeddings()
 			vectordb = Chroma.from_documents(documents=full_docs, embedding=embedding, collection_name=st.session_state.vta_code, persist_directory=temp_dir)
-			#vectordb.persist()
+			vectordb.persist()
 			save_files_to_mongodb(temp_dir,st.session_state.vta_code)
 			vectordb = None
 		return True
