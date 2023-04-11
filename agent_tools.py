@@ -318,11 +318,10 @@ def extract_files_from_mongodb(_tch_code):
         
         with open(file_path, "wb") as f:
             f.write(file.read())
-
+	
     return temp_dir
 
 
-@st.cache_resource
 def load_instance_index(_temp_dir):
 	
 	embeddings = OpenAIEmbeddings()
