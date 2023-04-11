@@ -154,6 +154,18 @@ def generate_data2(documents):
 		st.write(f"Error: {e}")
 		return False
 
+
+def delete_files_from_mongodb(tch_code):
+    fs = gridfs.GridFS(db)
+
+    # Find all files with the specified tch_code
+    files = fs.find({"tch_code": tch_code})
+
+    # Delete each file
+    for file in files:
+        fs.delete(file._id)
+
+
 def save_files_to_mongodb(temp_dir, tch_code):
     fs = gridfs.GridFS(db)
 
@@ -196,6 +208,8 @@ def generate_data(documents):
 
 			docs = split_meta_docs(tmp_file.name, source, topic, hyperlinks, tch_code)
 			full_docs.extend(docs)  # Extend the full_docs list with the new docs
+
+		delete_files_from_mongodb(st.session_state.vta_code)
 
 		
 		with tempfile.TemporaryDirectory() as temp_dir:
