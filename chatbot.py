@@ -131,26 +131,36 @@ def show_links():
 				f"""<a href="{url}" style="font-weight: normal; color: #187bcd;">{url}</a>""",
 			)
 			
+
 def show_related_links():
-	if not st.session_state.related_questions:
-		st.write('No links found.')
-	elif st.session_state.source_bot == True:
-		for i in range(0, len(st.session_state.related_questions), 2):
-			title = st.session_state.related_questions[i]
-			content = st.session_state.related_questions[i+1]
-			stoggle(
-				f"""<span style="font-weight: normal; color: #187bcd;">{i//2+1}. {title}</span>""",
-				f"""<span style="font-weight: normal; color: black;">{content}</span>""",
-			)
-	else:
-		for i, question_info in enumerate(st.session_state.related_questions):
-			question = question_info.get("question")
-			snippet = question_info.get("snippet")
-			url = question_info.get("url")
-			stoggle(
-					f"""<span style="font-weight: normal; color: #187bcd;">{i+1}. {question}</span>""",
-					f"""<a href="{url}" style="font-weight: normal; color: #187bcd;">{snippet}</a>""",
-				)
+    if not st.session_state.related_questions:
+        st.write('No links found.')
+        return
+    elif st.session_state.source_bot == True:
+        for i in range(0, len(st.session_state.related_questions), 2):
+            if i+1 >= len(st.session_state.related_questions):
+                st.write('No links found.')
+                return
+            title = st.session_state.related_questions[i]
+            content = st.session_state.related_questions[i+1]
+            stoggle(
+                f"""<span style="font-weight: normal; color: #187bcd;">{i//2+1}. {title}</span>""",
+                f"""<span style="font-weight: normal; color: black;">{content}</span>""",
+            )
+    else:
+        for i, question_info in enumerate(st.session_state.related_questions):
+            if not all(key in question_info for key in ['question', 'snippet', 'url']):
+                st.write('No links found.')
+                return
+            question = question_info['question']
+            snippet = question_info['snippet']
+            url = question_info['url']
+            stoggle(
+                f"""<span style="font-weight: normal; color: #187bcd;">{i+1}. {question}</span>""",
+                f"""<a href="{url}" style="font-weight: normal; color: #187bcd;">{snippet}</a>""",
+            )
+
+
 
 def clear_text():
 	st.session_state["temp"] = st.session_state["text"]
@@ -180,6 +190,7 @@ def process_resource_bot(response):
 		st.session_state.web_link.append(f"Ref No: ({st.session_state.s_count})-{source}: {topic}")
 		st.session_state.web_link.append(url)
 
+	st.session_state.related_questions = []
 	if source_documents:
 		for document in source_documents:
 			source = document.metadata['source']

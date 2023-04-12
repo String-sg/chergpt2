@@ -20,6 +20,10 @@ config = configparser.ConfigParser()
 config.read('config.ini')
 db_host = st.secrets["db_host"]
 #db_host = config['constants']['db_host']
+# serper_key = st.secrets["serpapi"]
+# bing_key = st.secrets["bingapi"]
+# serper_url = config['constants']['serp_url']
+# bing_url = config['constants']['bing_url']
 db_client = config['constants']['db_client']
 client = pymongo.MongoClient(db_host, tlsCAFile=certifi.where())
 db = client[db_client]
@@ -370,6 +374,7 @@ def document_search(query: str) ->str:
 		st.session_state.web_link.append(f"Ref No: ({st.session_state.s_count})-{f_source}: {f_topic}")
 		st.session_state.web_link.append(f_url)
 
+	st.session_state.related_questions = []
 	if source_documents:
 		for document in source_documents:
 			source = document.metadata['source']

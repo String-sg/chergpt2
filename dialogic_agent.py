@@ -17,6 +17,7 @@ from typing import List, Dict
 from langchain.vectorstores import Chroma, FAISS
 from langchain.chains import ConversationalRetrievalChain
 from langchain.chains.qa_with_sources import load_qa_with_sources_chain
+from langchain.chains.conversational_retrieval.prompts import CONDENSE_QUESTION_PROMPT
 from agent_tools import wikipedia_to_json_string, document_search, google_search_serp, bing_search_internet
 
 
@@ -332,17 +333,15 @@ def metacog_agent(): #to be further upgraded by the base agent base class
 @st.cache_resource
 def load_instance_index(_tch_code):
 	embeddings = OpenAIEmbeddings()
-	#vectordb = Chroma(collection_name=st.session_state.teacher_key, embedding_function=embeddings, persist_directory=_temp_dir)
-	#vectordb = Pinecone.from_existing_index(st.secrets["pine_index"], embeddings, _tch_code)
-	#extract_files_from_mongodb(_tch_code)
 	vectordb = FAISS.load_local(_tch_code, embeddings)
 
 	return vectordb
 
-
 def ailc_resources_bot(_query): #not in use for now 
-	if 'chat_history' not in st.session_state:
-		st.session_state.chat_history = [] 
+	# if 'chat_history' not in st.session_state:
+	# 	st.session_state.chat_history = [] 
+
+	chat_history = []
 
 	os.environ["OPENAI_API_KEY"] = st.session_state.api_key
 	os.environ["KMP_DUPLICATE_LIB_OK"] = "TRUE"
@@ -360,14 +359,20 @@ def ailc_resources_bot(_query): #not in use for now
 				)
 
 
-	#vectordb = load_instance_index(extract_files_from_mongodb(st.session_state.teacher_key))
-	vectordb = load_instance_index(st.session_state.teacher_key)
-	#st.write(vectordb)
-	#question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
-	#doc_chain = load_qa_with_sources_chain(llm, chain_type="map_reduce")
-	qa = ConversationalRetrievalChain.from_llm(llm, vectordb.as_retriever(), return_source_documents=True)
-	result = qa({"question": _query, "chat_history": st.session_state.chat_history})
-	#st.session_state.chat_history.append(result['answer'])
+	vectorstore = load_instance_index(st.session_state.teacher_key)
+
+	question_generator = LLMChain(llm=llm, prompt=CONDENSE_QUESTION_PROMPT)
+	doc_chain = load_qa_with_sources_chain(llm, chain_type="map_reduce")
+
+	qa = ConversationalRetrievalChain(
+    retriever=vectorstore.as_retriever(),
+    question_generator=question_generator,
+    combine_docs_chain=doc_chain,
+    return_source_documents=True
+	)
+
+	result = qa({"question": _query, "chat_history": chat_history})
+
 	return result
 
 

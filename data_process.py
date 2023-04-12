@@ -7,7 +7,7 @@ import os
 import re
 import gridfs
 from langchain.embeddings.openai import OpenAIEmbeddings
-from langchain.vectorstores import Chroma, FAISS, Pinecone
+from langchain.vectorstores import Chroma, FAISS
 from langchain.text_splitter import CharacterTextSplitter
 from langchain.document_loaders import PagedPDFSplitter
 import configparser
