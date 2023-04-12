@@ -77,7 +77,7 @@ def main():
 
 	#st.title("✎ Metacognition prototype")
 	#st.title("GPT3.5/4 Dialogic Agent prototype")
-	st.title("✎ CherGpt - Virtual Learning Assistant (Beta V2)")
+	st.title("✎ CherGpt - Virtual Learning Assistant (Beta V2.1)")
 
 	student_tabs_str = config.get('menu_lists', 'student_tabs')
 	student_tabs = ast.literal_eval(student_tabs_str)
