@@ -32,7 +32,11 @@ client = pymongo.MongoClient(db_host, tlsCAFile=certifi.where())
 db = client[db_client]
 data_collection = db[config['constants']['sd']]
 user_info_collection = db[config['constants']['ui']]
-st.set_page_config(layout="wide")
+st.set_page_config(
+	layout="wide"
+	page_title="CherGPT: Virtual Learning Assistant",
+    page_icon="",
+)
 
 c_agent = "chergpt_agent"
 ag_agent = "ailc_agent_google"
@@ -77,7 +81,7 @@ def main():
 
 	#st.title("✎ Metacognition prototype")
 	#st.title("GPT3.5/4 Dialogic Agent prototype")
-	st.title("CherGPT ")
+	st.title("CherGPT")
 	st.caption("Virtual Learning Assistant (Beta V2.1")
 	student_tabs_str = config.get('menu_lists', 'student_tabs')
 	student_tabs = ast.literal_eval(student_tabs_str)
