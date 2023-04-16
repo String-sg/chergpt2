@@ -101,7 +101,7 @@ def teacher_login():
 
 def class_login():
 	with st.form(key='access'):
-		st.write("Students, enter your VTA code to access this tool")
+		st.write("For students")
 		vta_code = st.text_input('VTA code: ')
 		vta_code = vta_code.lower()
 		submit_button = st.form_submit_button(label='Start')
