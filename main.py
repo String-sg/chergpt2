@@ -77,8 +77,8 @@ def main():
 
 	#st.title("✎ Metacognition prototype")
 	#st.title("GPT3.5/4 Dialogic Agent prototype")
-	st.title("✎ CherGpt - Virtual Learning Assistant (Beta V2.1)")
-
+	st.title("CherGPT ")
+	st.caption("Virtual Learning Assistant (Beta V2.1")
 	student_tabs_str = config.get('menu_lists', 'student_tabs')
 	student_tabs = ast.literal_eval(student_tabs_str)
 	student_icons_str = config.get('menu_lists', 'student_icons')
@@ -116,8 +116,7 @@ def main():
 			)
 	if tabs =='Login':
 		colored_header(
-		label="Students and Teachers Login page",
-		description="Enter your student VTA code or teacher ID and password",
+		label="Sign in",
 		color_name="blue-70",
 		)
 		placeholder2 = st.empty()
