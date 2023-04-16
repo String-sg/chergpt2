@@ -33,9 +33,9 @@ db = client[db_client]
 data_collection = db[config['constants']['sd']]
 user_info_collection = db[config['constants']['ui']]
 st.set_page_config(
-	layout="wide"
+	layout="wide",
 	page_title="CherGPT: Virtual Learning Assistant",
-    page_icon="",
+    page_icon=st.image("https://res.cloudinary.com/df6dcketg/image/upload/v1681623799/favicon-32x32_a7xraz.png")
 )
 
 c_agent = "chergpt_agent"
