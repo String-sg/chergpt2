@@ -66,7 +66,7 @@ if 'cb_settings_key' not in st.session_state:
 
 def teacher_login():
 	with st.form(key="authenticate"):
-		st.write("For Teachers")
+		st.write("Please key in your teacher code and password to access the data")
 		teacher_code = st.text_input('Teacher code:')
 		teacher_code = teacher_code.lower()
 		password = st.text_input('Password:', type="password")
@@ -101,7 +101,7 @@ def teacher_login():
 
 def class_login():
 	with st.form(key='access'):
-		st.write("For students")
+		st.write("Students, enter your VTA code to access this tool")
 		vta_code = st.text_input('VTA code: ')
 		vta_code = vta_code.lower()
 		submit_button = st.form_submit_button(label='Start')

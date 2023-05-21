@@ -32,11 +32,7 @@ client = pymongo.MongoClient(db_host, tlsCAFile=certifi.where())
 db = client[db_client]
 data_collection = db[config['constants']['sd']]
 user_info_collection = db[config['constants']['ui']]
-st.set_page_config(
-	layout="wide",
-	page_title="CherGPT: Virtual Learning Assistant",
-    page_icon=st.image("https://res.cloudinary.com/df6dcketg/image/upload/v1681623799/favicon-32x32_a7xraz.png")
-)
+st.set_page_config(layout="wide")
 
 c_agent = "chergpt_agent"
 ag_agent = "ailc_agent_google"
@@ -81,8 +77,8 @@ def main():
 
 	#st.title("✎ Metacognition prototype")
 	#st.title("GPT3.5/4 Dialogic Agent prototype")
-	st.title("CherGPT")
-	st.caption("Virtual Learning Assistant (Beta V2.1")
+	st.title("✎ CherGpt - Virtual Learning Assistant (Beta V2.1)")
+
 	student_tabs_str = config.get('menu_lists', 'student_tabs')
 	student_tabs = ast.literal_eval(student_tabs_str)
 	student_icons_str = config.get('menu_lists', 'student_icons')
@@ -120,7 +116,8 @@ def main():
 			)
 	if tabs =='Login':
 		colored_header(
-		label="Sign in",
+		label="Students and Teachers Login page",
+		description="Enter your student VTA code or teacher ID and password",
 		color_name="blue-70",
 		)
 		placeholder2 = st.empty()
