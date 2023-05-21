@@ -117,8 +117,8 @@ def main():
                            )
     if tabs == 'Login':
         colored_header(
-            label="Students and Teachers Login page",
-            description="Enter your student VTA code or teacher ID and password",
+            label="Sign in",
+            description="",
             color_name="blue-70",
         )
         placeholder2 = st.empty()
@@ -127,13 +127,13 @@ def main():
             col1, col2 = st.columns([2, 2])
             with col1:
                 if st.session_state.vta_key == False:
-                    result = teacher_login()
-                    if result:
+                    if class_login() == True:
                         pass
                         placeholder2.empty()
             with col2:
                 if st.session_state.vta_key == False:
-                    if class_login() == True:
+                    result = teacher_login()
+                    if result:
                         pass
                         placeholder2.empty()
         if st.session_state.vta_key == True:
