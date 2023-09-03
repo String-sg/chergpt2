@@ -22,3 +22,8 @@ You can develop your own function and call the function in the main(), you need 
 Secrets.toml is part of your Streamlit deployment and is the equivalent of .env file
 <br><br>
 Note: please approach a member of the String team for assistance with secrets.toml 
+
+```
+db_host = "insert your own MongoDB URI"
+OPENAI_API_KEY = "insert your own"
+```
