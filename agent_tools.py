@@ -31,7 +31,9 @@ data_collection = db[config['constants']['sd']]
 user_info_collection = db[config['constants']['ui']]
 
 
+# Function to get wikipedia data
 def get_wikipedia_data(query, max_results=4):
+    # Search Wikipedia and limit the number of results
     try:
         search_results = wikipedia.search(query)[:max_results]
         search_results_with_summary_and_url = []
