@@ -20,7 +20,7 @@ Thereafter, in your terminal, run:<br>
 ### Required Setup
 1) MongoDB account** 
 2) Retrieve your own OpenAPI key 
-3) Deploy this app to streamlit. 
+3) Deploy this app to streamlit. <br><br>
 ** If you would like to view chatlogs (basically a backend/ some sort of datastore). The basic chatbot setup without backend is simpler. More will be explained in the documentation (Work-in-progress)
 
 You can develop your own function and call the function in the main(), you need to modify the default tab list in secrets.toml to add in a new function
