@@ -1,6 +1,8 @@
-# CherGPT v2
+# CherGPT Starter kit
+<img width="689" alt="image" src="https://github.com/String-sg/chergpt2/assets/44336310/589dae66-8345-4ae5-9d4f-780cfec138e5">
 
-Developed by Joe Tay<br>
+<b>Main developer (Web)</b>: Joe Tay<br>
+<b>Main developer (Telegram) and Web Starter Kit</b>: Kahhow<br>
 Documentation maintained by Kahhow and Adrian<br>
 Support and access managed by Lance<br>
 
