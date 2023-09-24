@@ -1,12 +1,12 @@
 # CherGPT Starter kit
-<img width="689" alt="image" src="https://github.com/String-sg/chergpt2/assets/44336310/589dae66-8345-4ae5-9d4f-780cfec138e5">
+> [!WARNING]  
+> This repository is no longer actively maintained. caa 10 Sep 2023, CherGPT is now in maintenance mode.
+> Please see [CherGPT Starter Kit](https://github.com/String-sg/chergpt-starter-kit) instead 
 
-<b>Main developer (Web)</b>: Joe Tay<br>
-<b>Main developer (Telegram) and Web Starter Kit</b>: Kahhow<br>
-Documentation maintained by Kahhow and Adrian<br>
-Support and access managed by Lance*<be>
-
-*caa 10 Sep 2023, CherGPT is now in maintenance mode. The team is working on 'CherGPT Starter Kit' to help more educators deploy their own AI powered chatbot. 
+<b>Main developer (Web)</b>: [Joe Tay](https://sg.linkedin.com/in/joe-tay2020)<br>
+<b>Main developer (Telegram) and Web Starter Kit</b>: [Kahhow](https://sg.linkedin.com/in/leekahhow)<br>
+Documentation previously maintained by [Kahhow](https://sg.linkedin.com/in/leekahhow) and Adrian<br>
+Support and access previously managed by [Lance](https://sg.linkedin.com/in/lance-tan)*<be>
 
 ## Setup instructions
 In your terminal, run:<br>
