@@ -1,7 +1,8 @@
-# CherGPT
 > [!WARNING]  
 > This repository is no longer actively maintained. caa 10 Sep 2023, CherGPT is now in maintenance mode.
-> Please see [CherGPT Starter Kit](https://github.com/String-sg/chergpt-starter-kit) instead 
+> Please see [CherGPT Basic](https://github.com/String-sg/chergpt-basic) instead 
+
+# CherGPT
 
 <img width="1050" alt="image" src="https://github.com/String-sg/chergpt2/assets/44336310/a8015029-46c5-45dc-a10e-559cad1d220d">
 
